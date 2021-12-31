@@ -4,6 +4,7 @@ import { parsebigint } from "./number_utils.js";
 import { Settings, MinMaxKeyboardAdjuster, Key, SettingsPannel, BooleanKeyboardAdjuster, InvalidateRenderCache, CheckIfRenderCacheInvalidatedAndReset } from "./settings.js";
 class Runner {
     version = "0.0.1 alpha";
+    // test
     main_canvas;
     size_adjust = new MinMaxKeyboardAdjuster(Settings.block_size, Key.of('z'), Key.of('x'));
     base_adjust = new MinMaxKeyboardAdjuster(Settings.base, Key.of('a'), Key.of('s'));
