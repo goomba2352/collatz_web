@@ -61,7 +61,9 @@ Starting seeds are simply javascript expressions which evaluate to a bigint. A `
 
 e.g. `parsebigint('10', 2) = bigint(2)` or `parsebigint('11', 3) = bigint(4)`
 ### Interesting seeds
-- Base 2, parsebigint("1".repeat(300),2);
+- Base 2
+  - `parsebigint("1".repeat(300),2);`
+  - `parsebigint('11100001'.repeat(2000), 2);`
   
 
 # Dev guide
