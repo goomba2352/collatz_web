@@ -1,17 +1,17 @@
 class BaseSetting<T> {
-  static INVALIDATE_RENDER_CACHE : boolean = true;
-  static DO_NOT_INVALIDATE_CACHE : boolean = false;
-  
-  private invalidate_render_cache: boolean;
-  private _value : T;
-  static cache_invalidated : boolean = false;
+  static INVALIDATE_RENDER_CACHE: boolean = true;
+  static DO_NOT_INVALIDATE_CACHE: boolean = false;
 
-  constructor(value : T, invalidate_render_cache: boolean) {
+  private invalidate_render_cache: boolean;
+  private _value: T;
+  static cache_invalidated: boolean = false;
+
+  constructor(value: T, invalidate_render_cache: boolean) {
     this._value = value;
     this.invalidate_render_cache = invalidate_render_cache;
   }
 
-  get value() : T {
+  get value(): T {
     return this._value;
   }
 
@@ -22,8 +22,9 @@ class BaseSetting<T> {
     this._value = value;
   }
 
-  static CheckCacheInvalidation() : boolean {
+  static CheckCacheInvalidation(): boolean {
     if (this.cache_invalidated) {
+      console.log("Render Cache Invalidated!");
       this.cache_invalidated = false;
       return true;
     }
@@ -31,11 +32,11 @@ class BaseSetting<T> {
   }
 }
 
-export function CheckIfRenderCacheInvalidatedAndReset() : boolean {
+export function CheckIfRenderCacheInvalidatedAndReset(): boolean {
   return BaseSetting.CheckCacheInvalidation();
 }
 
-export function InvalidateRenderCache() : void {
+export function InvalidateRenderCache(): void {
   BaseSetting.cache_invalidated = true;
 }
 
@@ -44,7 +45,13 @@ export class MinMaxSetting extends BaseSetting<number> {
   private max: number;
   private delta: number = 1;
 
-  constructor(min: number, max: number, default_value: number, invalidate_render_cache : boolean, delta: number = 1) {
+  constructor(
+    min: number,
+    max: number,
+    default_value: number,
+    invalidate_render_cache: boolean,
+    delta: number = 1
+  ) {
     super(default_value, invalidate_render_cache);
     this.min = min;
     this.max = max;
@@ -73,28 +80,27 @@ export class MinMaxSetting extends BaseSetting<number> {
 }
 
 export class BooleanSetting extends BaseSetting<boolean> {
-  constructor(value : boolean, invalidate_render_cache : boolean) {
+  constructor(value: boolean, invalidate_render_cache: boolean) {
     super(value, invalidate_render_cache);
   }
-  
-  on() : void {
+
+  on(): void {
     this.value = true;
   }
 
-  off() : void {
+  off(): void {
     this.value = false;
   }
 
-  toggle() : void {
+  toggle(): void {
     this.value = !this.value;
   }
-
 }
 
 export class Settings {
-  static bgColor: [number, number, number] = [10, 10, 10];
+  static bgColor: [number, number, number] = [0, 0, 0];
   static baseColors: Map<String, [number, number, number]> = new Map([
-    ["0", [0, 0, 0]], //       0
+    ["0", [50, 50, 50]], //    0
     ["1", [128, 0, 0]], //     1
     ["2", [0, 128, 0]], //     2
     ["3", [128, 128, 0]], //   3
@@ -112,36 +118,47 @@ export class Settings {
     ["f", [255, 255, 255]], // F
   ]);
   static base: MinMaxSetting = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE);
-  static block_size: MinMaxSetting = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE);
+  static render_mode: MinMaxSetting = new MinMaxSetting(0, 1, 1, true);
+  static block_size: MinMaxSetting = new MinMaxSetting(
+    1,
+    20,
+    3,
+    BaseSetting.INVALIDATE_RENDER_CACHE
+  );
   static run: BooleanSetting = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE);
+  static reverse : BooleanSetting = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE);
 
   private constructor() {}
+
+  static CacheHash() : string {
+    return Settings.base.value.toString() + (Settings.reverse.value ? "r" : "n");
+  }
 }
 
 export class Key {
-  ctrl : boolean = false;
-  shift : boolean = false;
-  key : string = null;
+  ctrl: boolean = false;
+  shift: boolean = false;
+  key: string = null;
 
-  private constructor(key : string) {
+  private constructor(key: string) {
     this.key = key;
   }
 
-  static of(key : string) : Key {
+  static of(key: string): Key {
     return new Key(key);
   }
 
-  andCtrl() : Key {
+  andCtrl(): Key {
     this.ctrl = true;
     return this;
   }
 
-  andShift() : Key {
+  andShift(): Key {
     this.shift = true;
     return this;
   }
 
-  matches(event: KeyboardEvent) : boolean {
+  matches(event: KeyboardEvent): boolean {
     if (this.ctrl && !event.ctrlKey) {
       return false;
     }
@@ -175,44 +192,44 @@ export class MinMaxKeyboardAdjuster {
 }
 
 export class BooleanKeyboardAdjuster {
-    setting: BooleanSetting;
-    key: Key;
-    invalidate_render_cache: boolean;
-  
-    constructor(setting: BooleanSetting, key: Key) {
-      this.setting = setting;
-      this.key = key;
-      document.addEventListener(
-        "keydown",
-        function (event: KeyboardEvent) {
-          if (this.key.matches(event)) {
-            this.setting.toggle();
-          }
-        }.bind(this)
-      );
-    }
+  setting: BooleanSetting;
+  key: Key;
+  invalidate_render_cache: boolean;
+
+  constructor(setting: BooleanSetting, key: Key) {
+    this.setting = setting;
+    this.key = key;
+    document.addEventListener(
+      "keydown",
+      function (event: KeyboardEvent) {
+        if (this.key.matches(event)) {
+          this.setting.toggle();
+        }
+      }.bind(this)
+    );
+  }
 }
 
 export class SettingsPannel {
   settings_div: HTMLDivElement;
-  constructor(hidden : boolean = true) {
+  constructor(hidden: boolean = true) {
     this.settings_div = document.createElement("div");
-    this.settings_div.classList.add("popup_settings")
+    this.settings_div.classList.add("popup_settings");
     document.body.append(this.settings_div);
     if (hidden) {
       this.settings_div.style.display = "none";
     }
   }
 
-  hide() : void {
-    this.settings_div.style.display="none";
+  hide(): void {
+    this.settings_div.style.display = "none";
   }
 
-  show() : void {
-    this.settings_div.style.display="block";
+  show(): void {
+    this.settings_div.style.display = "block";
   }
 
-  toggle() : boolean {
+  toggle(): boolean {
     if (this.settings_div.style.display == "none") {
       this.show();
       return true;

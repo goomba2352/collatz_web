@@ -2,15 +2,16 @@ import Denque from "denque";
 import { Drawing } from "./drawing.js";
 import { parsebigint } from "./number_utils.js";
 import { Settings, MinMaxKeyboardAdjuster, Key, SettingsPannel, BooleanKeyboardAdjuster, InvalidateRenderCache, CheckIfRenderCacheInvalidatedAndReset } from "./settings.js";
+import { SpiralView } from "./number_renderer.js";
 class Runner {
-    version = "0.0.1 alpha";
-    // test
-    main_canvas;
-    size_adjust = new MinMaxKeyboardAdjuster(Settings.block_size, Key.of('z'), Key.of('x'));
-    base_adjust = new MinMaxKeyboardAdjuster(Settings.base, Key.of('a'), Key.of('s'));
-    pause = new BooleanKeyboardAdjuster(Settings.run, Key.of(' '));
-    settings_panel = new SettingsPannel();
     constructor() {
+        this.version = "0.0.1 alpha";
+        this.size_adjust = new MinMaxKeyboardAdjuster(Settings.block_size, Key.of('z'), Key.of('x'));
+        this.base_adjust = new MinMaxKeyboardAdjuster(Settings.base, Key.of('a'), Key.of('s'));
+        this.render_mode = new MinMaxKeyboardAdjuster(Settings.render_mode, Key.of(','), Key.of('.'));
+        this.pause = new BooleanKeyboardAdjuster(Settings.run, Key.of(' '));
+        this.reverse = new BooleanKeyboardAdjuster(Settings.reverse, Key.of('r'));
+        this.settings_panel = new SettingsPannel();
         this.main_canvas = new MainCanvas(document.getElementById("main_canvas"));
         globalThis.main_canvas = this.main_canvas;
         globalThis.parsebigint = parsebigint;
@@ -27,18 +28,29 @@ class Runner {
     }
 }
 class HistoryElement {
-    number;
-    cached_string = null;
-    op;
-    bitmap;
     constructor(number, op) {
+        this.cached_string = null;
+        this.cache_hash = null;
         this.number = number;
         this.op = op;
         this.bitmap = document.createElement("canvas");
-        this.ReRender();
+        this.Update(true, Settings.CacheHash());
     }
-    ReRender() {
-        this.cached_string = this.number.toString(Settings.base.value);
+    Update(redraw, cache_hash) {
+        if (this.cache_hash != cache_hash) {
+            this.cached_string = this.number.toString(Settings.base.value);
+            if (Settings.reverse.value) {
+                this.cached_string = this.cached_string.split("").reverse().join("");
+            }
+            this.cache_hash = cache_hash;
+        }
+        if (redraw) {
+            if (Settings.render_mode.value == 0) {
+                this.UpdateInternalBitmapForLineView();
+            }
+        }
+    }
+    UpdateInternalBitmapForLineView() {
         this.bitmap.width = window.innerWidth;
         this.bitmap.height = Settings.block_size.value;
         var render_context = this.bitmap.getContext("2d");
@@ -49,15 +61,31 @@ class HistoryElement {
             }
             var number_color = Settings.baseColors.get(this.cached_string[j]);
             if (number_color == null) {
-                console.log("Could not find color for: " + this.cached_string[j]);
                 continue;
             }
             Drawing.FillRect(render_context, x, 0, Settings.block_size.value, Settings.block_size.value, number_color);
         }
     }
+    BlitSpiralOntoCanvas(render_context) {
+        var sp = new SpiralView(Math.floor(render_context.canvas.height / Settings.block_size.value), Math.floor(render_context.canvas.width / Settings.block_size.value));
+        for (var i = 0; i < this.cached_string.length; i++) {
+            sp.AddOne(this.cached_string[i]);
+        }
+        for (var i = 0; i < sp.rows.length; i++) {
+            for (var j = 0; j < sp.rows[i].length; j++) {
+                var val = sp.rows[i][j];
+                var number_color = Settings.baseColors.get(val);
+                if (number_color == null) {
+                    continue;
+                }
+                var x = j * Settings.block_size.value;
+                var y = i * Settings.block_size.value;
+                Drawing.FillRect(render_context, x, y, Settings.block_size.value, Settings.block_size.value, number_color);
+            }
+        }
+    }
 }
 class History {
-    history;
     constructor() {
         this.history = new Denque();
     }
@@ -87,20 +115,29 @@ class History {
 class DataViewer {
     constructor() { }
     draw(x, y, width, height, render_context, history) {
-        this.history_view(x, y, width, height, render_context, history);
-    }
-    history_view(x, y, width, height, render_context, history) {
-        // background
         var redraw = CheckIfRenderCacheInvalidatedAndReset();
-        if (redraw) {
-            console.log("Cache invalidated!");
-        }
+        // background
         Drawing.FillRect(render_context, x, y, width, height, Settings.bgColor);
+        var cache_hash = Settings.CacheHash();
+        for (var i = 0; i < history.all.length; i++) {
+            var history_element = history.all.peekAt(i);
+            history_element.Update(redraw, cache_hash);
+        }
+        if (Settings.render_mode.value == 0) {
+            this.HistoryView(render_context, history);
+        }
+        else if (Settings.render_mode.value == 1) {
+            this.SpiralView(render_context, history);
+        }
+    }
+    SpiralView(render_context, history) {
+        if (history.length >= 1) {
+            history.current.BlitSpiralOntoCanvas(render_context);
+        }
+    }
+    HistoryView(render_context, history) {
         for (var i = -1; i >= -history.length; i--) {
             var history_element = history.all.peekAt(i);
-            if (redraw) {
-                history_element.ReRender();
-            }
             var render_y = render_context.canvas.height + Settings.block_size.value * i;
             render_context.drawImage(history_element.bitmap, 0, render_y);
         }
@@ -121,11 +158,6 @@ class StepOperator {
     }
 }
 class MainCanvas {
-    canvas;
-    data_viewer;
-    history;
-    p_width;
-    p_height;
     constructor(canvas) {
         this.canvas = canvas;
         this.data_viewer = new DataViewer();

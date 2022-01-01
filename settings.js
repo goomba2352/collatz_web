@@ -1,30 +1,32 @@
-class BaseSetting {
-    static INVALIDATE_RENDER_CACHE = true;
-    static DO_NOT_INVALIDATE_CACHE = false;
-    invalidate_render_cache;
-    _value;
-    static cache_invalidated = false;
-    constructor(value, invalidate_render_cache) {
-        this._value = value;
-        this.invalidate_render_cache = invalidate_render_cache;
-    }
-    get value() {
-        return this._value;
-    }
-    set value(value) {
-        if (this.invalidate_render_cache) {
-            BaseSetting.cache_invalidated = true;
+let BaseSetting = /** @class */ (() => {
+    class BaseSetting {
+        constructor(value, invalidate_render_cache) {
+            this._value = value;
+            this.invalidate_render_cache = invalidate_render_cache;
         }
-        this._value = value;
-    }
-    static CheckCacheInvalidation() {
-        if (this.cache_invalidated) {
-            this.cache_invalidated = false;
-            return true;
+        get value() {
+            return this._value;
         }
-        return false;
+        set value(value) {
+            if (this.invalidate_render_cache) {
+                BaseSetting.cache_invalidated = true;
+            }
+            this._value = value;
+        }
+        static CheckCacheInvalidation() {
+            if (this.cache_invalidated) {
+                console.log("Render Cache Invalidated!");
+                this.cache_invalidated = false;
+                return true;
+            }
+            return false;
+        }
     }
-}
+    BaseSetting.INVALIDATE_RENDER_CACHE = true;
+    BaseSetting.DO_NOT_INVALIDATE_CACHE = false;
+    BaseSetting.cache_invalidated = false;
+    return BaseSetting;
+})();
 export function CheckIfRenderCacheInvalidatedAndReset() {
     return BaseSetting.CheckCacheInvalidation();
 }
@@ -32,11 +34,9 @@ export function InvalidateRenderCache() {
     BaseSetting.cache_invalidated = true;
 }
 export class MinMaxSetting extends BaseSetting {
-    min;
-    max;
-    delta = 1;
     constructor(min, max, default_value, invalidate_render_cache, delta = 1) {
         super(default_value, invalidate_render_cache);
+        this.delta = 1;
         this.min = min;
         this.max = max;
         this.delta = delta;
@@ -74,10 +74,16 @@ export class BooleanSetting extends BaseSetting {
         this.value = !this.value;
     }
 }
-export class Settings {
-    static bgColor = [10, 10, 10];
-    static baseColors = new Map([
-        ["0", [0, 0, 0]],
+let Settings = /** @class */ (() => {
+    class Settings {
+        constructor() { }
+        static CacheHash() {
+            return Settings.base.value.toString() + (Settings.reverse.value ? "r" : "n");
+        }
+    }
+    Settings.bgColor = [0, 0, 0];
+    Settings.baseColors = new Map([
+        ["0", [50, 50, 50]],
         ["1", [128, 0, 0]],
         ["2", [0, 128, 0]],
         ["3", [128, 128, 0]],
@@ -92,18 +98,21 @@ export class Settings {
         ["c", [0, 0, 200]],
         ["d", [200, 0, 200]],
         ["e", [0, 0, 200]],
-        ["f", [255, 255, 255]], // F
+        ["f", [255, 255, 255]],
     ]);
-    static base = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE);
-    static block_size = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE);
-    static run = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE);
-    constructor() { }
-}
+    Settings.base = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE);
+    Settings.render_mode = new MinMaxSetting(0, 1, 1, true);
+    Settings.block_size = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE);
+    Settings.run = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE);
+    Settings.reverse = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE);
+    return Settings;
+})();
+export { Settings };
 export class Key {
-    ctrl = false;
-    shift = false;
-    key = null;
     constructor(key) {
+        this.ctrl = false;
+        this.shift = false;
+        this.key = null;
         this.key = key;
     }
     static of(key) {
@@ -128,9 +137,6 @@ export class Key {
     }
 }
 export class MinMaxKeyboardAdjuster {
-    setting;
-    decKey;
-    incKey;
     constructor(setting, decKey, incKey) {
         this.setting = setting;
         this.decKey = decKey;
@@ -146,9 +152,6 @@ export class MinMaxKeyboardAdjuster {
     }
 }
 export class BooleanKeyboardAdjuster {
-    setting;
-    key;
-    invalidate_render_cache;
     constructor(setting, key) {
         this.setting = setting;
         this.key = key;
@@ -160,7 +163,6 @@ export class BooleanKeyboardAdjuster {
     }
 }
 export class SettingsPannel {
-    settings_div;
     constructor(hidden = true) {
         this.settings_div = document.createElement("div");
         this.settings_div.classList.add("popup_settings");
