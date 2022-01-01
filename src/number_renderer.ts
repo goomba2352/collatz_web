@@ -80,7 +80,7 @@ class HistoryViewMode extends RenderMode {
     super(true, "History View");
   }
 
-  override Render(
+  Render(
     number_string: string,
     settings: Settings,
     render_context: CanvasRenderingContext2D
@@ -110,7 +110,7 @@ class SpiralViewMode extends RenderMode {
   constructor() {
     super(false, "Spiral View");
   }
-  override Render(
+  Render(
     number_string: string,
     settings: Settings,
     render_context: CanvasRenderingContext2D

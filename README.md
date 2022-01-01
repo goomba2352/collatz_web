@@ -54,7 +54,7 @@ Current supported controls:
 # Usage
 You can visit the preview below:
 
-https://htmlpreview.github.io/?https://github.com/goomba2352/collatz_web/blob/master/index.html
+https://htmlpreview.github.io/?https://github.com/goomba2352/collatz_web/blob/master/web/index.html
 
 ## Starting seeds
 Starting seeds are simply javascript expressions which evaluate to a bigint. A `parsebigint(number_string : string, base : number)` convenience function has been provided with support up to base 36. Valid supported characters are [0-9] and [a-z] (lowercase)!
@@ -67,12 +67,14 @@ e.g. `parsebigint('10', 2) = bigint(2)` or `parsebigint('11', 3) = bigint(4)`
   
 
 # Dev guide
-- Any source worth considering is *.ts (function) and index.html/main.css (layout)
-- You can use `npm install` to get dependencies (e.g. Denque is used for a double-ended queue)
-- build.bat is the script I use to compile ts to browser-compatible js.
-  - *.js is compiled from *.ts with tsc
-  - Browserify links node modules and js together into a browser compatible app_web.js
-- run.bat simply starts a local http-server (https://www.npmjs.com/package/http-server). You can also just preview directly from github.io (See [Usage](#Usage)), as this is a web app.
+- Source is at `src/*.ts` and `web/{index.html, main.css}`
+- You can use `cd src` and then `npm install` to get dependencies
+- `tools/build`.bat is the script used to compile ts to browser-compatible js.
+  - `*.js` is compiled from `*.ts` with `tsc`
+  - Browserify links node modules and js together into a browser compatible `app_web.js`
+  - Run from main directory, i.e., invoke with `./tools/build.bat`
+- run.bat simply starts a local http-server (https://www.npmjs.com/package/http-server). You can also just preview
+  - Run from main directory, i.e., invoke with `./tools/run.bat` directly from github.io (See [Usage](#Usage)), as this is a web app.
 
 # Future work
 - Always improve UX

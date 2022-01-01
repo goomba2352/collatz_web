@@ -87,7 +87,7 @@ export class MinMaxSetting extends BaseSetting<number> {
     }
   }
 
-  override ControllerConstructor(): HTMLElement {
+  ControllerConstructor(): HTMLElement {
     var div: HTMLDivElement = document.createElement("div");
     var input: HTMLInputElement = document.createElement("input");
     input.type = "range";
@@ -110,7 +110,7 @@ export class MinMaxSetting extends BaseSetting<number> {
     return div;
   }
 
-  override UpdateController(): void {
+  UpdateController(): void {
     var input: HTMLInputElement = this.controller.childNodes[0] as HTMLInputElement;
     input.value = this.value.toString();
     var label : HTMLLabelElement = this.controller.childNodes[1] as HTMLLabelElement;
@@ -135,7 +135,7 @@ export class BooleanSetting extends BaseSetting<boolean> {
     this.value = !this.value;
   }
 
-  override ControllerConstructor(): HTMLElement {
+  ControllerConstructor(): HTMLElement {
     var div: HTMLDivElement = document.createElement("div");
     var cb: HTMLInputElement = document.createElement("input");
     cb.type = "checkbox";
@@ -156,7 +156,7 @@ export class BooleanSetting extends BaseSetting<boolean> {
     return div;
   }
 
-  protected override UpdateController(): void {
+  protected UpdateController(): void {
     var div = this.controller as HTMLDivElement;
     var cb = div.childNodes[0] as HTMLInputElement;
     cb.checked = this.value;

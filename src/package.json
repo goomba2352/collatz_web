@@ -5,7 +5,8 @@
     "babelify": "^10.0.0",
     "browserify": "^17.0.0",
     "denque": "^2.0.1",
-    "esmify": "^2.1.1"
+    "esmify": "^2.1.1",
+    "http-server": "^14.0.0"
   },
   "dependencies": {
     "collections": "^5.1.12",
