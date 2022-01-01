@@ -9,20 +9,21 @@ var _number_utils = require("./number_utils.js");
 
 var _settings = require("./settings.js");
 
-var _number_renderer = require("./number_renderer.js");
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class Runner {
+  version = "0.0.1 alpha";
+  main_canvas;
+  settings = new _settings.Settings();
+  size_adjust = new _settings.MinMaxKeyboardAdjuster(this.settings.block_size, _settings.Key.of('z'), _settings.Key.of('x'));
+  base_adjust = new _settings.MinMaxKeyboardAdjuster(this.settings.base, _settings.Key.of('a'), _settings.Key.of('s'));
+  render_mode = new _settings.MinMaxKeyboardAdjuster(this.settings.render_mode, _settings.Key.of(','), _settings.Key.of('.'));
+  pause = new _settings.BooleanKeyboardAdjuster(this.settings.run, _settings.Key.of(' '));
+  reverse = new _settings.BooleanKeyboardAdjuster(this.settings.reverse, _settings.Key.of('r'));
+
   constructor() {
-    this.version = "0.0.1 alpha";
-    this.size_adjust = new _settings.MinMaxKeyboardAdjuster(_settings.Settings.block_size, _settings.Key.of('z'), _settings.Key.of('x'));
-    this.base_adjust = new _settings.MinMaxKeyboardAdjuster(_settings.Settings.base, _settings.Key.of('a'), _settings.Key.of('s'));
-    this.render_mode = new _settings.MinMaxKeyboardAdjuster(_settings.Settings.render_mode, _settings.Key.of(','), _settings.Key.of('.'));
-    this.pause = new _settings.BooleanKeyboardAdjuster(_settings.Settings.run, _settings.Key.of(' '));
-    this.reverse = new _settings.BooleanKeyboardAdjuster(_settings.Settings.reverse, _settings.Key.of('r'));
-    this.settings_panel = new _settings.SettingsPannel();
-    this.main_canvas = new MainCanvas(document.getElementById("main_canvas"));
+    this.main_canvas = new MainCanvas(this.settings, document.getElementById("main_canvas"));
+    this.settings.parent_canvas_reference = this.main_canvas.canvas;
     globalThis.main_canvas = this.main_canvas;
     globalThis.parsebigint = _number_utils.parsebigint;
     var restart_button = document.getElementById("restart");
@@ -44,83 +45,44 @@ class Runner {
 }
 
 class HistoryElement {
-  constructor(number, op) {
-    this.cached_string = null;
-    this.cache_hash = null;
+  number;
+  cached_string = null;
+  op;
+  bitmap;
+  cache_hash = null;
+
+  constructor(settings, number, op) {
     this.number = number;
     this.op = op;
     this.bitmap = document.createElement("canvas");
-    this.Update(true, _settings.Settings.CacheHash());
+    this.Update(settings, true, settings.PreProcessCacheHash());
   }
 
-  Update(redraw, cache_hash) {
-    if (this.cache_hash != cache_hash) {
-      this.cached_string = this.number.toString(_settings.Settings.base.value);
+  Update(settings, redraw, cache_hash) {
+    var render_mode = settings.render_mode.t_value;
 
-      if (_settings.Settings.reverse.value) {
+    if (this.cache_hash != cache_hash) {
+      this.cached_string = this.number.toString(settings.base.value);
+
+      if (settings.reverse.value) {
         this.cached_string = this.cached_string.split("").reverse().join("");
       }
 
       this.cache_hash = cache_hash;
     }
 
-    if (redraw) {
-      if (_settings.Settings.render_mode.value == 0) {
-        this.UpdateInternalBitmapForLineView();
-      }
-    }
-  }
-
-  UpdateInternalBitmapForLineView() {
-    this.bitmap.width = window.innerWidth;
-    this.bitmap.height = _settings.Settings.block_size.value;
-    var render_context = this.bitmap.getContext("2d");
-
-    for (var j = 0; j < this.cached_string.length; j++) {
-      var x = j * _settings.Settings.block_size.value;
-
-      if (x > this.bitmap.width) {
-        break;
-      }
-
-      var number_color = _settings.Settings.baseColors.get(this.cached_string[j]);
-
-      if (number_color == null) {
-        continue;
-      }
-
-      _drawing.Drawing.FillRect(render_context, x, 0, _settings.Settings.block_size.value, _settings.Settings.block_size.value, number_color);
-    }
-  }
-
-  BlitSpiralOntoCanvas(render_context) {
-    var sp = new _number_renderer.SpiralView(Math.floor(render_context.canvas.height / _settings.Settings.block_size.value), Math.floor(render_context.canvas.width / _settings.Settings.block_size.value));
-
-    for (var i = 0; i < this.cached_string.length; i++) {
-      sp.AddOne(this.cached_string[i]);
-    }
-
-    for (var i = 0; i < sp.rows.length; i++) {
-      for (var j = 0; j < sp.rows[i].length; j++) {
-        var val = sp.rows[i][j];
-
-        var number_color = _settings.Settings.baseColors.get(val);
-
-        if (number_color == null) {
-          continue;
-        }
-
-        var x = j * _settings.Settings.block_size.value;
-        var y = i * _settings.Settings.block_size.value;
-
-        _drawing.Drawing.FillRect(render_context, x, y, _settings.Settings.block_size.value, _settings.Settings.block_size.value, number_color);
-      }
+    if (redraw && render_mode.is_history_view_type) {
+      this.bitmap.width = settings.parent_canvas_reference.width;
+      this.bitmap.height = settings.block_size.value;
+      render_mode.Render(this.cached_string, settings, this.bitmap.getContext("2d"));
     }
   }
 
 }
 
 class History {
+  history;
+
   constructor() {
     this.history = new _denque.default();
   }
@@ -137,9 +99,9 @@ class History {
     }
   }
 
-  RestartAndSeed(seed) {
+  RestartAndSeed(settings, seed) {
     this.history.clear();
-    this.history.push(new HistoryElement(seed, -1));
+    this.history.push(new HistoryElement(settings, seed, -1));
   }
 
   get current() {
@@ -157,37 +119,41 @@ class History {
 }
 
 class DataViewer {
-  constructor() {}
+  settings;
+
+  constructor(settings) {
+    this.settings = settings;
+  }
 
   draw(x, y, width, height, render_context, history) {
-    var redraw = (0, _settings.CheckIfRenderCacheInvalidatedAndReset)(); // background
+    var redraw = this.settings.CheckCacheInvalidation(); // background
 
-    _drawing.Drawing.FillRect(render_context, x, y, width, height, _settings.Settings.bgColor);
+    _drawing.Drawing.FillRect(render_context, x, y, width, height, this.settings.bgColor);
 
-    var cache_hash = _settings.Settings.CacheHash();
+    var cache_hash = this.settings.PreProcessCacheHash();
 
     for (var i = 0; i < history.all.length; i++) {
       var history_element = history.all.peekAt(i);
-      history_element.Update(redraw, cache_hash);
+      history_element.Update(this.settings, redraw, cache_hash);
     }
 
-    if (_settings.Settings.render_mode.value == 0) {
+    if (this.settings.render_mode.t_value.is_history_view_type) {
       this.HistoryView(render_context, history);
-    } else if (_settings.Settings.render_mode.value == 1) {
-      this.SpiralView(render_context, history);
+    } else {
+      this.LatestNumberView(render_context, history);
     }
   }
 
-  SpiralView(render_context, history) {
+  LatestNumberView(render_context, history) {
     if (history.length >= 1) {
-      history.current.BlitSpiralOntoCanvas(render_context);
+      this.settings.render_mode.t_value.Render(history.current.cached_string, this.settings, render_context);
     }
   }
 
   HistoryView(render_context, history) {
     for (var i = -1; i >= -history.length; i--) {
       var history_element = history.all.peekAt(i);
-      var render_y = render_context.canvas.height + _settings.Settings.block_size.value * i;
+      var render_y = render_context.canvas.height + this.settings.block_size.value * i;
       render_context.drawImage(history_element.bitmap, 0, render_y);
     }
   }
@@ -195,29 +161,37 @@ class DataViewer {
 }
 
 class StepOperator {
-  static Next(current) {
+  static Next(settings, current) {
     if (current.number % 2n == 0n) {
-      return new HistoryElement(current.number / 2n, 0);
+      return new HistoryElement(settings, current.number / 2n, 0);
     } else if (current.number % 2n == 1n) {
-      return new HistoryElement(current.number * 3n + 1n, 1);
+      return new HistoryElement(settings, current.number * 3n + 1n, 1);
     } else {
       console.log("This shouldn't happen");
-      return new HistoryElement(0n, -1);
+      return new HistoryElement(settings, 0n, -1);
     }
   }
 
 }
 
 class MainCanvas {
-  constructor(canvas) {
+  canvas;
+  data_viewer;
+  history;
+  p_width;
+  p_height;
+  settings;
+
+  constructor(settings, canvas) {
+    this.settings = settings;
     this.canvas = canvas;
-    this.data_viewer = new DataViewer();
+    this.data_viewer = new DataViewer(settings);
     this.history = new History();
     window.requestAnimationFrame(this.Draw.bind(this));
   }
 
   RestartWith(starting_number) {
-    this.history.RestartAndSeed(starting_number);
+    this.history.RestartAndSeed(this.settings, starting_number);
   }
 
   Draw() {
@@ -227,15 +201,15 @@ class MainCanvas {
     this.canvas.height = window.innerHeight - 30;
     this.canvas.width = window.innerWidth;
 
-    if (this.p_width != this.canvas.width) {
-      (0, _settings.InvalidateRenderCache)();
+    if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
+      this.settings.InvalidateRenderCache();
     }
 
     this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
 
-    if (_settings.Settings.run.value && this.history.length > 0) {
-      this.history.Add(StepOperator.Next(this.history.current));
-      this.history.TrimDown(this.canvas.height / _settings.Settings.block_size.value * 2);
+    if (this.settings.run.value && this.history.length > 0) {
+      this.history.Add(StepOperator.Next(this.settings, this.history.current));
+      this.history.TrimDown(this.canvas.height / this.settings.block_size.value * 2);
     }
 
     window.requestAnimationFrame(this.Draw.bind(this));
@@ -248,7 +222,7 @@ window.onload = function () {
   globalThis.runner = runner;
 };
 
-},{"./drawing.js":2,"./number_renderer.js":4,"./number_utils.js":5,"./settings.js":6,"denque":3}],2:[function(require,module,exports){
+},{"./drawing.js":2,"./number_utils.js":5,"./settings.js":6,"denque":3}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -723,64 +697,139 @@ module.exports = Denque;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.RenderMode = void 0;
+exports.RenderModes = RenderModes;
 exports.SpiralView = void 0;
 
-let SpiralView =
-/** @class */
-(() => {
-  class SpiralView {
-    constructor(rows, cols) {
-      this.rows = [];
+var _drawing = require("./drawing");
 
-      for (var i = 0; i < rows; i++) {
-        this.rows.push([]);
+class SpiralView {
+  static encoded_dirs = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+  static next_level_dir = [1, 0];
+  rows = [];
+  cursor;
+  middle_pos;
+  level;
+  needed_for_next_level;
+  inner_level_tracker;
 
-        for (var j = 0; j < cols; j++) {
-          this.rows[i].push(null);
-        }
+  constructor(rows, cols) {
+    for (var i = 0; i < rows; i++) {
+      this.rows.push([]);
+
+      for (var j = 0; j < cols; j++) {
+        this.rows[i].push(null);
       }
-
-      this.cursor = [0, 0];
-      this.middle_pos = [Math.floor(rows / 2), Math.floor(cols / 2)];
-      this.level = 0;
-      this.needed_for_next_level = 0;
-      this.inner_level_tracker = 0;
     }
 
-    AddOne(elem) {
-      var result = false;
-      var position = [this.middle_pos[0] + this.cursor[0], this.middle_pos[1] + this.cursor[1]];
+    this.cursor = [0, 0];
+    this.middle_pos = [Math.floor(rows / 2), Math.floor(cols / 2)];
+    this.level = 0;
+    this.needed_for_next_level = 0;
+    this.inner_level_tracker = 0;
+  }
 
-      if (position[0] >= 0 && position[0] < this.rows.length && position[1] >= 0 && position[1] < this.rows[0].length) {
-        result = true;
-        this.rows[position[0]][position[1]] = elem;
-      }
+  AddOne(elem) {
+    var result = false;
+    var position = [this.middle_pos[0] + this.cursor[0], this.middle_pos[1] + this.cursor[1]];
 
-      this.inner_level_tracker++;
+    if (position[0] >= 0 && position[0] < this.rows.length && position[1] >= 0 && position[1] < this.rows[0].length) {
+      result = true;
+      this.rows[position[0]][position[1]] = elem;
+    }
 
-      if (this.inner_level_tracker >= this.needed_for_next_level) {
-        this.level += 1;
-        this.needed_for_next_level += 8;
-        this.inner_level_tracker = 0;
-        this.cursor = [this.cursor[0] + SpiralView.next_level_dir[0], this.cursor[1] + SpiralView.next_level_dir[1]];
-        return result;
-      }
+    this.inner_level_tracker++;
 
-      var dir = SpiralView.encoded_dirs[Math.floor(this.inner_level_tracker / Math.floor(this.needed_for_next_level / 4))];
-      this.cursor = [this.cursor[0] + dir[0], this.cursor[1] + dir[1]];
+    if (this.inner_level_tracker >= this.needed_for_next_level) {
+      this.level += 1;
+      this.needed_for_next_level += 8;
+      this.inner_level_tracker = 0;
+      this.cursor = [this.cursor[0] + SpiralView.next_level_dir[0], this.cursor[1] + SpiralView.next_level_dir[1]];
       return result;
     }
 
+    var dir = SpiralView.encoded_dirs[Math.floor(this.inner_level_tracker / Math.floor(this.needed_for_next_level / 4))];
+    this.cursor = [this.cursor[0] + dir[0], this.cursor[1] + dir[1]];
+    return result;
   }
 
-  SpiralView.encoded_dirs = [[0, 1], [-1, 0], [0, -1], [1, 0]];
-  SpiralView.next_level_dir = [1, 0];
-  return SpiralView;
-})();
+}
 
 exports.SpiralView = SpiralView;
 
-},{}],5:[function(require,module,exports){
+class RenderMode {
+  is_history_view_type = false;
+  name;
+
+  constructor(history_view_type, name) {
+    this.is_history_view_type = history_view_type;
+  }
+
+}
+
+exports.RenderMode = RenderMode;
+
+class HistoryViewMode extends RenderMode {
+  constructor() {
+    super(true, "History View");
+  }
+
+  Render(number_string, settings, render_context) {
+    for (var j = 0; j < number_string.length; j++) {
+      var x = j * settings.block_size.value;
+
+      if (x > render_context.canvas.width) {
+        break;
+      }
+
+      var number_color = settings.baseColors.get(number_string[j]);
+
+      if (number_color == null) {
+        continue;
+      }
+
+      _drawing.Drawing.FillRect(render_context, x, 0, settings.block_size.value, settings.block_size.value, number_color);
+    }
+  }
+
+}
+
+class SpiralViewMode extends RenderMode {
+  constructor() {
+    super(false, "Spiral View");
+  }
+
+  Render(number_string, settings, render_context) {
+    var sp = new SpiralView(Math.floor(render_context.canvas.height / settings.block_size.value), Math.floor(render_context.canvas.width / settings.block_size.value));
+
+    for (var i = 0; i < number_string.length; i++) {
+      sp.AddOne(number_string[i]);
+    }
+
+    for (var i = 0; i < sp.rows.length; i++) {
+      for (var j = 0; j < sp.rows[i].length; j++) {
+        var val = sp.rows[i][j];
+        var number_color = settings.baseColors.get(val);
+
+        if (number_color == null) {
+          continue;
+        }
+
+        var x = j * settings.block_size.value;
+        var y = i * settings.block_size.value;
+
+        _drawing.Drawing.FillRect(render_context, x, y, settings.block_size.value, settings.block_size.value, number_color);
+      }
+    }
+  }
+
+}
+
+function RenderModes() {
+  return [new HistoryViewMode(), new SpiralViewMode()];
+}
+
+},{"./drawing":2}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -800,62 +849,44 @@ globalThis.parsebigint = parsebigint;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.BooleanSetting = exports.BooleanKeyboardAdjuster = void 0;
-exports.CheckIfRenderCacheInvalidatedAndReset = CheckIfRenderCacheInvalidatedAndReset;
-exports.InvalidateRenderCache = InvalidateRenderCache;
-exports.SettingsPannel = exports.Settings = exports.MinMaxSetting = exports.MinMaxKeyboardAdjuster = exports.Key = void 0;
+exports.SettingsPannel = exports.Settings = exports.MinMaxSetting = exports.MinMaxKeyboardAdjuster = exports.Key = exports.BooleanSetting = exports.BooleanKeyboardAdjuster = exports.ArraySetting = void 0;
 
-let BaseSetting =
-/** @class */
-(() => {
-  class BaseSetting {
-    constructor(value, invalidate_render_cache) {
-      this._value = value;
-      this.invalidate_render_cache = invalidate_render_cache;
-    }
+var _number_renderer = require("./number_renderer");
 
-    get value() {
-      return this._value;
-    }
+class BaseSetting {
+  static INVALIDATE_RENDER_CACHE = true;
+  static DO_NOT_INVALIDATE_CACHE = false;
+  parent_settings;
+  invalidate_render_cache;
+  _value;
 
-    set value(value) {
-      if (this.invalidate_render_cache) {
-        BaseSetting.cache_invalidated = true;
-      }
-
-      this._value = value;
-    }
-
-    static CheckCacheInvalidation() {
-      if (this.cache_invalidated) {
-        console.log("Render Cache Invalidated!");
-        this.cache_invalidated = false;
-        return true;
-      }
-
-      return false;
-    }
-
+  constructor(value, invalidate_render_cache, parent_settings) {
+    this._value = value;
+    this.parent_settings = parent_settings;
+    this.invalidate_render_cache = invalidate_render_cache;
   }
 
-  BaseSetting.INVALIDATE_RENDER_CACHE = true;
-  BaseSetting.DO_NOT_INVALIDATE_CACHE = false;
-  BaseSetting.cache_invalidated = false;
-  return BaseSetting;
-})();
+  get value() {
+    return this._value;
+  }
 
-function CheckIfRenderCacheInvalidatedAndReset() {
-  return BaseSetting.CheckCacheInvalidation();
-}
+  set value(value) {
+    if (this.invalidate_render_cache) {
+      this.parent_settings.InvalidateRenderCache();
+    }
 
-function InvalidateRenderCache() {
-  BaseSetting.cache_invalidated = true;
+    this._value = value;
+  }
+
 }
 
 class MinMaxSetting extends BaseSetting {
-  constructor(min, max, default_value, invalidate_render_cache, delta = 1) {
-    super(default_value, invalidate_render_cache);
-    this.delta = 1;
+  min;
+  max;
+  delta = 1;
+
+  constructor(min, max, default_value, invalidate_render_cache, settings, delta = 1) {
+    super(default_value, invalidate_render_cache, settings);
     this.min = min;
     this.max = max;
     this.delta = delta;
@@ -890,8 +921,8 @@ class MinMaxSetting extends BaseSetting {
 exports.MinMaxSetting = MinMaxSetting;
 
 class BooleanSetting extends BaseSetting {
-  constructor(value, invalidate_render_cache) {
-    super(value, invalidate_render_cache);
+  constructor(value, invalidate_render_cache, settings) {
+    super(value, invalidate_render_cache, settings);
   }
 
   on() {
@@ -910,35 +941,66 @@ class BooleanSetting extends BaseSetting {
 
 exports.BooleanSetting = BooleanSetting;
 
-let Settings =
-/** @class */
-(() => {
-  class Settings {
-    constructor() {}
+class ArraySetting extends MinMaxSetting {
+  values;
 
-    static CacheHash() {
-      return Settings.base.value.toString() + (Settings.reverse.value ? "r" : "n");
-    }
-
+  constructor(default_index, values, invalidate_render_cache, settings) {
+    super(0, values.length - 1, default_index, invalidate_render_cache, settings);
+    this.values = values;
   }
 
-  Settings.bgColor = [0, 0, 0];
-  Settings.baseColors = new Map([["0", [50, 50, 50]], ["1", [128, 0, 0]], ["2", [0, 128, 0]], ["3", [128, 128, 0]], ["4", [0, 0, 128]], ["5", [128, 0, 128]], ["6", [0, 0, 128]], ["7", [128, 128, 128]], ["8", [200, 200, 200]], ["9", [200, 0, 0]], ["a", [0, 200, 0]], ["b", [200, 200, 0]], ["c", [0, 0, 200]], ["d", [200, 0, 200]], ["e", [0, 0, 200]], ["f", [255, 255, 255]]]);
-  Settings.base = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE);
-  Settings.render_mode = new MinMaxSetting(0, 1, 1, true);
-  Settings.block_size = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE);
-  Settings.run = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE);
-  Settings.reverse = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE);
-  return Settings;
-})();
+  get t_value() {
+    return this.values[this.value];
+  }
+
+}
+
+exports.ArraySetting = ArraySetting;
+
+class Settings {
+  render_cache_invalidated = false;
+  parent_canvas_reference;
+  bgColor = [0, 0, 0];
+  baseColors = new Map([["0", [50, 50, 50]], ["1", [128, 0, 0]], ["2", [0, 128, 0]], ["3", [128, 128, 0]], ["4", [0, 0, 128]], ["5", [128, 0, 128]], ["6", [0, 0, 128]], ["7", [128, 128, 128]], ["8", [200, 200, 200]], ["9", [200, 0, 0]], ["a", [0, 200, 0]], ["b", [200, 200, 0]], ["c", [0, 0, 200]], ["d", [200, 0, 200]], ["e", [0, 0, 200]], ["f", [255, 255, 255]] // F
+  ]);
+  base = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  render_mode = new ArraySetting(0, (0, _number_renderer.RenderModes)(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  block_size = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  run = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  reverse = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+
+  CheckCacheInvalidation() {
+    if (this.render_cache_invalidated) {
+      console.log("Render Cache Invalidated!");
+      this.render_cache_invalidated = false;
+      return true;
+    }
+
+    return false;
+  }
+
+  InvalidateRenderCache() {
+    this.render_cache_invalidated = true;
+  }
+
+  constructor() {} // Add values to PreProcessCacheHash() if they affect the output of the number.
+  // e.g. Reversing the number and it's base affects this, where as the view mode or size do not.
+
+
+  PreProcessCacheHash() {
+    return this.base.value.toString() + (this.reverse.value ? "r" : "n");
+  }
+
+}
 
 exports.Settings = Settings;
 
 class Key {
+  ctrl = false;
+  shift = false;
+  key = null;
+
   constructor(key) {
-    this.ctrl = false;
-    this.shift = false;
-    this.key = null;
     this.key = key;
   }
 
@@ -973,6 +1035,10 @@ class Key {
 exports.Key = Key;
 
 class MinMaxKeyboardAdjuster {
+  setting;
+  decKey;
+  incKey;
+
   constructor(setting, decKey, incKey) {
     this.setting = setting;
     this.decKey = decKey;
@@ -991,6 +1057,10 @@ class MinMaxKeyboardAdjuster {
 exports.MinMaxKeyboardAdjuster = MinMaxKeyboardAdjuster;
 
 class BooleanKeyboardAdjuster {
+  setting;
+  key;
+  invalidate_render_cache;
+
   constructor(setting, key) {
     this.setting = setting;
     this.key = key;
@@ -1006,6 +1076,8 @@ class BooleanKeyboardAdjuster {
 exports.BooleanKeyboardAdjuster = BooleanKeyboardAdjuster;
 
 class SettingsPannel {
+  settings_div;
+
   constructor(hidden = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
@@ -1038,4 +1110,4 @@ class SettingsPannel {
 
 exports.SettingsPannel = SettingsPannel;
 
-},{}]},{},[2,1]);
+},{"./number_renderer":4}]},{},[2,1]);

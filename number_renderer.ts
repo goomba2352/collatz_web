@@ -1,3 +1,6 @@
+import { Drawing } from "./drawing";
+import { Settings } from "./settings";
+
 export class SpiralView {
   static encoded_dirs: [number, number][] = [
     [0, 1],
@@ -60,4 +63,80 @@ export class SpiralView {
     this.cursor = [this.cursor[0] + dir[0], this.cursor[1] + dir[1]];
     return result;
   }
+}
+
+export abstract class RenderMode {
+  is_history_view_type: boolean = false;
+  name: string;
+  constructor(history_view_type: boolean, name: String) {
+    this.is_history_view_type = history_view_type;
+  }
+
+  abstract Render(number_string: string, settings: Settings, context: CanvasRenderingContext2D);
+}
+
+class HistoryViewMode extends RenderMode {
+  constructor() {
+    super(true, "History View");
+  }
+
+  Render(number_string: string, settings: Settings, render_context: CanvasRenderingContext2D) {
+    for (var j: number = 0; j < number_string.length; j++) {
+      var x: number = j * settings.block_size.value;
+      if (x > render_context.canvas.width) {
+        break;
+      }
+      var number_color: [number, number, number] = settings.baseColors.get(number_string[j]);
+      if (number_color == null) {
+        continue;
+      }
+      Drawing.FillRect(
+        render_context,
+        x,
+        0,
+        settings.block_size.value,
+        settings.block_size.value,
+        number_color
+      );
+    }
+  }
+}
+
+class SpiralViewMode extends RenderMode {
+
+  constructor() {
+    super(false, "Spiral View");
+  }
+  Render(number_string: string, settings: Settings, render_context: CanvasRenderingContext2D) {
+    var sp: SpiralView = new SpiralView(
+      Math.floor(render_context.canvas.height / settings.block_size.value),
+      Math.floor(render_context.canvas.width / settings.block_size.value)
+    );
+    for (var i = 0; i < number_string.length; i++) {
+      sp.AddOne(number_string[i]);
+    }
+    for (var i = 0; i < sp.rows.length; i++) {
+      for (var j = 0; j < sp.rows[i].length; j++) {
+        var val: string = sp.rows[i][j];
+        var number_color: [number, number, number] = settings.baseColors.get(val);
+        if (number_color == null) {
+          continue;
+        }
+        var x: number = j * settings.block_size.value;
+        var y: number = i * settings.block_size.value;
+        Drawing.FillRect(
+          render_context,
+          x,
+          y,
+          settings.block_size.value,
+          settings.block_size.value,
+          number_color
+        );
+      }
+    }
+  }
+}
+
+export function RenderModes() : RenderMode[] {
+  return [new HistoryViewMode(), new SpiralViewMode()];
 }

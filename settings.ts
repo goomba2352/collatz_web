@@ -1,13 +1,16 @@
+import { RenderMode, RenderModes } from "./number_renderer";
+
 class BaseSetting<T> {
   static INVALIDATE_RENDER_CACHE: boolean = true;
   static DO_NOT_INVALIDATE_CACHE: boolean = false;
+  parent_settings: Settings;
 
   private invalidate_render_cache: boolean;
   private _value: T;
-  static cache_invalidated: boolean = false;
 
-  constructor(value: T, invalidate_render_cache: boolean) {
+  constructor(value: T, invalidate_render_cache: boolean, parent_settings:Settings) {
     this._value = value;
+    this.parent_settings = parent_settings;
     this.invalidate_render_cache = invalidate_render_cache;
   }
 
@@ -17,28 +20,12 @@ class BaseSetting<T> {
 
   set value(value: T) {
     if (this.invalidate_render_cache) {
-      BaseSetting.cache_invalidated = true;
+      this.parent_settings.InvalidateRenderCache();
     }
     this._value = value;
   }
-
-  static CheckCacheInvalidation(): boolean {
-    if (this.cache_invalidated) {
-      console.log("Render Cache Invalidated!");
-      this.cache_invalidated = false;
-      return true;
-    }
-    return false;
-  }
 }
 
-export function CheckIfRenderCacheInvalidatedAndReset(): boolean {
-  return BaseSetting.CheckCacheInvalidation();
-}
-
-export function InvalidateRenderCache(): void {
-  BaseSetting.cache_invalidated = true;
-}
 
 export class MinMaxSetting extends BaseSetting<number> {
   private min: number;
@@ -50,9 +37,10 @@ export class MinMaxSetting extends BaseSetting<number> {
     max: number,
     default_value: number,
     invalidate_render_cache: boolean,
+    settings: Settings,
     delta: number = 1
   ) {
-    super(default_value, invalidate_render_cache);
+    super(default_value, invalidate_render_cache, settings);
     this.min = min;
     this.max = max;
     this.delta = delta;
@@ -80,8 +68,8 @@ export class MinMaxSetting extends BaseSetting<number> {
 }
 
 export class BooleanSetting extends BaseSetting<boolean> {
-  constructor(value: boolean, invalidate_render_cache: boolean) {
-    super(value, invalidate_render_cache);
+  constructor(value: boolean, invalidate_render_cache: boolean, settings: Settings) {
+    super(value, invalidate_render_cache, settings);
   }
 
   on(): void {
@@ -97,9 +85,29 @@ export class BooleanSetting extends BaseSetting<boolean> {
   }
 }
 
+export class ArraySetting<T> extends MinMaxSetting {
+  values: T[];
+  constructor(
+    default_index: number,
+    values: T[],
+    invalidate_render_cache: boolean,
+    settings: Settings
+  ) {
+    super(0, values.length - 1, default_index, invalidate_render_cache, settings);
+    this.values = values;
+  }
+
+  get t_value(): T {
+    return this.values[this.value];
+  }
+}
+
 export class Settings {
-  static bgColor: [number, number, number] = [0, 0, 0];
-  static baseColors: Map<String, [number, number, number]> = new Map([
+
+  private render_cache_invalidated: boolean = false;
+  parent_canvas_reference: HTMLCanvasElement;
+  bgColor: [number, number, number] = [0, 0, 0];
+  baseColors: Map<String, [number, number, number]> = new Map([
     ["0", [50, 50, 50]], //    0
     ["1", [128, 0, 0]], //     1
     ["2", [0, 128, 0]], //     2
@@ -117,21 +125,42 @@ export class Settings {
     ["e", [0, 0, 200]], //     E
     ["f", [255, 255, 255]], // F
   ]);
-  static base: MinMaxSetting = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE);
-  static render_mode: MinMaxSetting = new MinMaxSetting(0, 1, 1, true);
-  static block_size: MinMaxSetting = new MinMaxSetting(
+  base: MinMaxSetting = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  render_mode: ArraySetting<RenderMode> = new ArraySetting(
+    0,
+    RenderModes(),
+    BaseSetting.INVALIDATE_RENDER_CACHE,
+    this
+  );
+  block_size: MinMaxSetting = new MinMaxSetting(
     1,
     20,
     3,
-    BaseSetting.INVALIDATE_RENDER_CACHE
+    BaseSetting.INVALIDATE_RENDER_CACHE,
+    this
   );
-  static run: BooleanSetting = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE);
-  static reverse : BooleanSetting = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE);
+  run: BooleanSetting = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  reverse: BooleanSetting = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
 
-  private constructor() {}
+  CheckCacheInvalidation(): boolean {
+    if (this.render_cache_invalidated) {
+      console.log("Render Cache Invalidated!");
+      this.render_cache_invalidated = false;
+      return true;
+    }
+    return false;
+  }
 
-  static CacheHash() : string {
-    return Settings.base.value.toString() + (Settings.reverse.value ? "r" : "n");
+  InvalidateRenderCache(): void {
+    this.render_cache_invalidated = true;
+  }
+
+  constructor() {}
+
+  // Add values to PreProcessCacheHash() if they affect the output of the number.
+  // e.g. Reversing the number and it's base affects this, where as the view mode or size do not.
+  PreProcessCacheHash(): string {
+    return this.base.value.toString() + (this.reverse.value ? "r" : "n");
   }
 }
 
