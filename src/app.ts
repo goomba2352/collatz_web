@@ -187,7 +187,7 @@ class MainCanvas {
     var context: CanvasRenderingContext2D = this.canvas.getContext("2d");
     this.p_height = this.canvas.height;
     this.p_width = this.canvas.width;
-    this.canvas.height = window.innerHeight - 130;
+    this.canvas.height = window.innerHeight - 50;
     this.canvas.width = window.innerWidth;
     if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
       this.settings.InvalidateRenderCache();
