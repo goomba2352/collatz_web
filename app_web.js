@@ -12,7 +12,7 @@ var _settings = require("./settings.js");
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class Runner {
-  version = "0.0.1 alpha";
+  version = "0.0.2 alpha";
   main_canvas;
   settings = new _settings.Settings();
   settings_panel = new _settings.SettingsPanel(this.settings);
@@ -950,7 +950,7 @@ class MinMaxSetting extends BaseSetting {
     }.bind(this));
     div.appendChild(input);
     var label = document.createElement("label");
-    label.innerText = this.name;
+    label.innerText = this.name + "=" + this.value;
     label.htmlFor = input.id;
     div.appendChild(label);
     return div;
@@ -959,6 +959,8 @@ class MinMaxSetting extends BaseSetting {
   UpdateController() {
     var input = this.controller.childNodes[0];
     input.value = this.value.toString();
+    var label = this.controller.childNodes[1];
+    label.innerText = this.name + "=" + this.value;
   }
 
 }

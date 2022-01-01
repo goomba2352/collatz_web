@@ -5,7 +5,7 @@ import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster, Setting
 import {RenderMode, SpiralView} from "./number_renderer.js";
 
 class Runner {
-  version: String = "0.0.1 alpha";
+  version: String = "0.0.2 alpha";
   main_canvas: MainCanvas;
   settings: Settings = new Settings();
   settings_panel: SettingsPanel = new SettingsPanel(this.settings);

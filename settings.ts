@@ -104,7 +104,7 @@ export class MinMaxSetting extends BaseSetting<number> {
     );
     div.appendChild(input);
     var label: HTMLLabelElement = document.createElement("label");
-    label.innerText = this.name;
+    label.innerText = this.name + "=" + this.value;
     label.htmlFor = input.id;
     div.appendChild(label);
     return div;
@@ -113,6 +113,8 @@ export class MinMaxSetting extends BaseSetting<number> {
   override UpdateController(): void {
     var input: HTMLInputElement = this.controller.childNodes[0] as HTMLInputElement;
     input.value = this.value.toString();
+    var label : HTMLLabelElement = this.controller.childNodes[1] as HTMLLabelElement;
+    label.innerText = this.name + "=" + this.value;
   }
 }
 

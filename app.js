@@ -3,7 +3,7 @@ import { Drawing } from "./drawing.js";
 import { parsebigint } from "./number_utils.js";
 import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster, SettingsPanel } from "./settings.js";
 class Runner {
-    version = "0.0.1 alpha";
+    version = "0.0.2 alpha";
     main_canvas;
     settings = new Settings();
     settings_panel = new SettingsPanel(this.settings);

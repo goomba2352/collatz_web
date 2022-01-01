@@ -77,7 +77,7 @@ export class MinMaxSetting extends BaseSetting {
         }.bind(this));
         div.appendChild(input);
         var label = document.createElement("label");
-        label.innerText = this.name;
+        label.innerText = this.name + "=" + this.value;
         label.htmlFor = input.id;
         div.appendChild(label);
         return div;
@@ -85,6 +85,8 @@ export class MinMaxSetting extends BaseSetting {
     UpdateController() {
         var input = this.controller.childNodes[0];
         input.value = this.value.toString();
+        var label = this.controller.childNodes[1];
+        label.innerText = this.name + "=" + this.value;
     }
 }
 export class BooleanSetting extends BaseSetting {
