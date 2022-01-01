@@ -1,13 +1,14 @@
 import Denque from "denque";
 import { Drawing } from "./drawing.js";
 import { parsebigint } from "./number_utils.js";
-import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster } from "./settings.js";
+import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster, SettingsPanel } from "./settings.js";
 import {RenderMode, SpiralView} from "./number_renderer.js";
 
 class Runner {
   version: String = "0.0.1 alpha";
   main_canvas: MainCanvas;
   settings: Settings = new Settings();
+  settings_panel: SettingsPanel = new SettingsPanel(this.settings);
   size_adjust : MinMaxKeyboardAdjuster = new MinMaxKeyboardAdjuster(this.settings.block_size, Key.of('z'), Key.of('x'));
   base_adjust : MinMaxKeyboardAdjuster = new MinMaxKeyboardAdjuster(this.settings.base, Key.of('a'), Key.of('s'));  
   render_mode : MinMaxKeyboardAdjuster = new MinMaxKeyboardAdjuster(this.settings.render_mode, Key.of(','), Key.of('.'));  

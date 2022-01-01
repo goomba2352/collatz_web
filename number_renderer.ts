@@ -80,7 +80,11 @@ class HistoryViewMode extends RenderMode {
     super(true, "History View");
   }
 
-  Render(number_string: string, settings: Settings, render_context: CanvasRenderingContext2D) {
+  override Render(
+    number_string: string,
+    settings: Settings,
+    render_context: CanvasRenderingContext2D
+  ) {
     for (var j: number = 0; j < number_string.length; j++) {
       var x: number = j * settings.block_size.value;
       if (x > render_context.canvas.width) {
@@ -103,11 +107,14 @@ class HistoryViewMode extends RenderMode {
 }
 
 class SpiralViewMode extends RenderMode {
-
   constructor() {
     super(false, "Spiral View");
   }
-  Render(number_string: string, settings: Settings, render_context: CanvasRenderingContext2D) {
+  override Render(
+    number_string: string,
+    settings: Settings,
+    render_context: CanvasRenderingContext2D
+  ) {
     var sp: SpiralView = new SpiralView(
       Math.floor(render_context.canvas.height / settings.block_size.value),
       Math.floor(render_context.canvas.width / settings.block_size.value)

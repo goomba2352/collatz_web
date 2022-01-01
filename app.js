@@ -1,11 +1,12 @@
 import Denque from "denque";
 import { Drawing } from "./drawing.js";
 import { parsebigint } from "./number_utils.js";
-import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster } from "./settings.js";
+import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster, SettingsPanel } from "./settings.js";
 class Runner {
     version = "0.0.1 alpha";
     main_canvas;
     settings = new Settings();
+    settings_panel = new SettingsPanel(this.settings);
     size_adjust = new MinMaxKeyboardAdjuster(this.settings.block_size, Key.of('z'), Key.of('x'));
     base_adjust = new MinMaxKeyboardAdjuster(this.settings.base, Key.of('a'), Key.of('s'));
     render_mode = new MinMaxKeyboardAdjuster(this.settings.render_mode, Key.of(','), Key.of('.'));

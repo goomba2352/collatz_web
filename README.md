@@ -42,7 +42,9 @@ This view is similar to a 1d cellular automata, where each step of the collatz s
 ```
 
 # Controls
-Current support controls:
+You can simply press "More" to see all settings, or use keyboard controls:
+
+Current supported controls:
 - [R]: Reverse the number string in all views
 - [Space]: Pause animation
 - [Z/X]: Change size of block (in pixels)

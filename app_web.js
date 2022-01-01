@@ -15,6 +15,7 @@ class Runner {
   version = "0.0.1 alpha";
   main_canvas;
   settings = new _settings.Settings();
+  settings_panel = new _settings.SettingsPanel(this.settings);
   size_adjust = new _settings.MinMaxKeyboardAdjuster(this.settings.block_size, _settings.Key.of('z'), _settings.Key.of('x'));
   base_adjust = new _settings.MinMaxKeyboardAdjuster(this.settings.base, _settings.Key.of('a'), _settings.Key.of('s'));
   render_mode = new _settings.MinMaxKeyboardAdjuster(this.settings.render_mode, _settings.Key.of(','), _settings.Key.of('.'));
@@ -849,18 +850,28 @@ globalThis.parsebigint = parsebigint;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.SettingsPannel = exports.Settings = exports.MinMaxSetting = exports.MinMaxKeyboardAdjuster = exports.Key = exports.BooleanSetting = exports.BooleanKeyboardAdjuster = exports.ArraySetting = void 0;
+exports.SettingsPanel = exports.Settings = exports.MinMaxSetting = exports.MinMaxKeyboardAdjuster = exports.Key = exports.BooleanSetting = exports.BooleanKeyboardAdjuster = exports.ArraySetting = void 0;
 
 var _number_renderer = require("./number_renderer");
 
+var globalId = -1;
+
+function NewGlobalId() {
+  globalId++;
+  return "gId" + globalId;
+}
+
 class BaseSetting {
+  name;
   static INVALIDATE_RENDER_CACHE = true;
   static DO_NOT_INVALIDATE_CACHE = false;
   parent_settings;
+  _controller = null;
   invalidate_render_cache;
   _value;
 
-  constructor(value, invalidate_render_cache, parent_settings) {
+  constructor(name, value, invalidate_render_cache, parent_settings) {
+    this.name = name;
     this._value = value;
     this.parent_settings = parent_settings;
     this.invalidate_render_cache = invalidate_render_cache;
@@ -870,12 +881,21 @@ class BaseSetting {
     return this._value;
   }
 
+  get controller() {
+    if (this._controller == null) {
+      this._controller = this.ControllerConstructor();
+    }
+
+    return this._controller;
+  }
+
   set value(value) {
     if (this.invalidate_render_cache) {
       this.parent_settings.InvalidateRenderCache();
     }
 
     this._value = value;
+    this.UpdateController();
   }
 
 }
@@ -885,8 +905,8 @@ class MinMaxSetting extends BaseSetting {
   max;
   delta = 1;
 
-  constructor(min, max, default_value, invalidate_render_cache, settings, delta = 1) {
-    super(default_value, invalidate_render_cache, settings);
+  constructor(name, min, max, default_value, invalidate_render_cache, settings, delta = 1) {
+    super(name, default_value, invalidate_render_cache, settings);
     this.min = min;
     this.max = max;
     this.delta = delta;
@@ -916,13 +936,38 @@ class MinMaxSetting extends BaseSetting {
     }
   }
 
+  ControllerConstructor() {
+    var div = document.createElement("div");
+    var input = document.createElement("input");
+    input.type = "range";
+    input.id = NewGlobalId();
+    input.min = this.min.toString();
+    input.max = this.max.toString();
+    input.step = this.delta.toString();
+    input.value = this.value.toString();
+    input.addEventListener("change", function () {
+      this.value = input.value;
+    }.bind(this));
+    div.appendChild(input);
+    var label = document.createElement("label");
+    label.innerText = this.name;
+    label.htmlFor = input.id;
+    div.appendChild(label);
+    return div;
+  }
+
+  UpdateController() {
+    var input = this.controller.childNodes[0];
+    input.value = this.value.toString();
+  }
+
 }
 
 exports.MinMaxSetting = MinMaxSetting;
 
 class BooleanSetting extends BaseSetting {
-  constructor(value, invalidate_render_cache, settings) {
-    super(value, invalidate_render_cache, settings);
+  constructor(name, value, invalidate_render_cache, settings) {
+    super(name, value, invalidate_render_cache, settings);
   }
 
   on() {
@@ -937,6 +982,30 @@ class BooleanSetting extends BaseSetting {
     this.value = !this.value;
   }
 
+  ControllerConstructor() {
+    var div = document.createElement("div");
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.name = this.name;
+    cb.id = NewGlobalId();
+    cb.checked = this.value;
+    cb.addEventListener("change", function () {
+      this.value = cb.checked;
+    }.bind(this));
+    div.appendChild(cb);
+    var label = document.createElement("label");
+    label.innerText = this.name;
+    label.htmlFor = cb.id;
+    div.appendChild(label);
+    return div;
+  }
+
+  UpdateController() {
+    var div = this.controller;
+    var cb = div.childNodes[0];
+    cb.checked = this.value;
+  }
+
 }
 
 exports.BooleanSetting = BooleanSetting;
@@ -944,8 +1013,8 @@ exports.BooleanSetting = BooleanSetting;
 class ArraySetting extends MinMaxSetting {
   values;
 
-  constructor(default_index, values, invalidate_render_cache, settings) {
-    super(0, values.length - 1, default_index, invalidate_render_cache, settings);
+  constructor(name, default_index, values, invalidate_render_cache, settings) {
+    super(name, 0, values.length - 1, default_index, invalidate_render_cache, settings);
     this.values = values;
   }
 
@@ -963,11 +1032,11 @@ class Settings {
   bgColor = [0, 0, 0];
   baseColors = new Map([["0", [50, 50, 50]], ["1", [128, 0, 0]], ["2", [0, 128, 0]], ["3", [128, 128, 0]], ["4", [0, 0, 128]], ["5", [128, 0, 128]], ["6", [0, 0, 128]], ["7", [128, 128, 128]], ["8", [200, 200, 200]], ["9", [200, 0, 0]], ["a", [0, 200, 0]], ["b", [200, 200, 0]], ["c", [0, 0, 200]], ["d", [200, 0, 200]], ["e", [0, 0, 200]], ["f", [255, 255, 255]] // F
   ]);
-  base = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
-  render_mode = new ArraySetting(0, (0, _number_renderer.RenderModes)(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
-  block_size = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
-  run = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
-  reverse = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  render_mode = new ArraySetting("renderer", 1, (0, _number_renderer.RenderModes)(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
 
   CheckCacheInvalidation() {
     if (this.render_cache_invalidated) {
@@ -1075,10 +1144,10 @@ class BooleanKeyboardAdjuster {
 
 exports.BooleanKeyboardAdjuster = BooleanKeyboardAdjuster;
 
-class SettingsPannel {
+class SettingsPanel {
   settings_div;
 
-  constructor(hidden = true) {
+  constructor(settings, hidden = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
     document.body.append(this.settings_div);
@@ -1086,6 +1155,12 @@ class SettingsPannel {
     if (hidden) {
       this.settings_div.style.display = "none";
     }
+
+    this.settings_div.appendChild(settings.reverse.controller);
+    this.settings_div.appendChild(settings.run.controller);
+    this.settings_div.appendChild(settings.base.controller);
+    this.settings_div.appendChild(settings.block_size.controller);
+    this.settings_div.appendChild(settings.render_mode.controller);
   }
 
   hide() {
@@ -1108,6 +1183,6 @@ class SettingsPannel {
 
 }
 
-exports.SettingsPannel = SettingsPannel;
+exports.SettingsPanel = SettingsPanel;
 
 },{"./number_renderer":4}]},{},[2,1]);

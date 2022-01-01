@@ -1,11 +1,19 @@
 import { RenderModes } from "./number_renderer";
+var globalId = -1;
+function NewGlobalId() {
+    globalId++;
+    return "gId" + globalId;
+}
 class BaseSetting {
+    name;
     static INVALIDATE_RENDER_CACHE = true;
     static DO_NOT_INVALIDATE_CACHE = false;
     parent_settings;
+    _controller = null;
     invalidate_render_cache;
     _value;
-    constructor(value, invalidate_render_cache, parent_settings) {
+    constructor(name, value, invalidate_render_cache, parent_settings) {
+        this.name = name;
         this._value = value;
         this.parent_settings = parent_settings;
         this.invalidate_render_cache = invalidate_render_cache;
@@ -13,19 +21,26 @@ class BaseSetting {
     get value() {
         return this._value;
     }
+    get controller() {
+        if (this._controller == null) {
+            this._controller = this.ControllerConstructor();
+        }
+        return this._controller;
+    }
     set value(value) {
         if (this.invalidate_render_cache) {
             this.parent_settings.InvalidateRenderCache();
         }
         this._value = value;
+        this.UpdateController();
     }
 }
 export class MinMaxSetting extends BaseSetting {
     min;
     max;
     delta = 1;
-    constructor(min, max, default_value, invalidate_render_cache, settings, delta = 1) {
-        super(default_value, invalidate_render_cache, settings);
+    constructor(name, min, max, default_value, invalidate_render_cache, settings, delta = 1) {
+        super(name, default_value, invalidate_render_cache, settings);
         this.min = min;
         this.max = max;
         this.delta = delta;
@@ -48,10 +63,33 @@ export class MinMaxSetting extends BaseSetting {
             this.value = this.min;
         }
     }
+    ControllerConstructor() {
+        var div = document.createElement("div");
+        var input = document.createElement("input");
+        input.type = "range";
+        input.id = NewGlobalId();
+        input.min = this.min.toString();
+        input.max = this.max.toString();
+        input.step = this.delta.toString();
+        input.value = this.value.toString();
+        input.addEventListener("change", function () {
+            this.value = input.value;
+        }.bind(this));
+        div.appendChild(input);
+        var label = document.createElement("label");
+        label.innerText = this.name;
+        label.htmlFor = input.id;
+        div.appendChild(label);
+        return div;
+    }
+    UpdateController() {
+        var input = this.controller.childNodes[0];
+        input.value = this.value.toString();
+    }
 }
 export class BooleanSetting extends BaseSetting {
-    constructor(value, invalidate_render_cache, settings) {
-        super(value, invalidate_render_cache, settings);
+    constructor(name, value, invalidate_render_cache, settings) {
+        super(name, value, invalidate_render_cache, settings);
     }
     on() {
         this.value = true;
@@ -62,11 +100,33 @@ export class BooleanSetting extends BaseSetting {
     toggle() {
         this.value = !this.value;
     }
+    ControllerConstructor() {
+        var div = document.createElement("div");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.name = this.name;
+        cb.id = NewGlobalId();
+        cb.checked = this.value;
+        cb.addEventListener("change", function () {
+            this.value = cb.checked;
+        }.bind(this));
+        div.appendChild(cb);
+        var label = document.createElement("label");
+        label.innerText = this.name;
+        label.htmlFor = cb.id;
+        div.appendChild(label);
+        return div;
+    }
+    UpdateController() {
+        var div = this.controller;
+        var cb = div.childNodes[0];
+        cb.checked = this.value;
+    }
 }
 export class ArraySetting extends MinMaxSetting {
     values;
-    constructor(default_index, values, invalidate_render_cache, settings) {
-        super(0, values.length - 1, default_index, invalidate_render_cache, settings);
+    constructor(name, default_index, values, invalidate_render_cache, settings) {
+        super(name, 0, values.length - 1, default_index, invalidate_render_cache, settings);
         this.values = values;
     }
     get t_value() {
@@ -95,11 +155,11 @@ export class Settings {
         ["e", [0, 0, 200]],
         ["f", [255, 255, 255]], // F
     ]);
-    base = new MinMaxSetting(2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
-    render_mode = new ArraySetting(0, RenderModes(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
-    block_size = new MinMaxSetting(1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
-    run = new BooleanSetting(true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
-    reverse = new BooleanSetting(true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+    base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+    render_mode = new ArraySetting("renderer", 1, RenderModes(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
+    block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+    run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+    reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
     CheckCacheInvalidation() {
         if (this.render_cache_invalidated) {
             console.log("Render Cache Invalidated!");
@@ -178,15 +238,20 @@ export class BooleanKeyboardAdjuster {
         }.bind(this));
     }
 }
-export class SettingsPannel {
+export class SettingsPanel {
     settings_div;
-    constructor(hidden = true) {
+    constructor(settings, hidden = true) {
         this.settings_div = document.createElement("div");
         this.settings_div.classList.add("popup_settings");
         document.body.append(this.settings_div);
         if (hidden) {
             this.settings_div.style.display = "none";
         }
+        this.settings_div.appendChild(settings.reverse.controller);
+        this.settings_div.appendChild(settings.run.controller);
+        this.settings_div.appendChild(settings.base.controller);
+        this.settings_div.appendChild(settings.block_size.controller);
+        this.settings_div.appendChild(settings.render_mode.controller);
     }
     hide() {
         this.settings_div.style.display = "none";
