@@ -6,7 +6,7 @@ function NewGlobalId(): string {
   return "gId" + globalId;
 }
 
-abstract class BaseSetting<T> {
+export abstract class BaseSetting<T> {
   name: string;
   static INVALIDATE_RENDER_CACHE: boolean = true;
   static DO_NOT_INVALIDATE_CACHE: boolean = false;
@@ -15,12 +15,17 @@ abstract class BaseSetting<T> {
 
   private invalidate_render_cache: boolean;
   private _value: T;
+  private listeners: ((T) => void)[] = [];
 
   constructor(name: string, value: T, invalidate_render_cache: boolean, parent_settings: Settings) {
     this.name = name;
     this._value = value;
     this.parent_settings = parent_settings;
     this.invalidate_render_cache = invalidate_render_cache;
+  }
+
+  AddListner(f: (T) => void) {
+    this.listeners.push(f);
   }
 
   get value(): T {
@@ -40,6 +45,10 @@ abstract class BaseSetting<T> {
     }
     this._value = value;
     this.UpdateController();
+    for (var i = 0; i < this.listeners.length; i++) {
+      console.log("called listener!");
+      this.listeners[i](value);
+    }
   }
 
   protected abstract UpdateController(): void;
@@ -182,6 +191,43 @@ class ArraySetting<T> extends MinMaxSetting {
   }
 }
 
+class StringSetting extends BaseSetting<string> {
+  constructor(
+    name: string,
+    value: string,
+    invalidate_render_cache: boolean,
+    settings: Settings
+  ) {
+    super(name, value, invalidate_render_cache, settings);
+  }
+  
+  protected UpdateController(): void {    
+    var input: HTMLInputElement = this.controller.childNodes[0] as HTMLInputElement;
+    input.value = this.value;
+  }
+
+  protected ControllerConstructor(): HTMLElement {
+    var div: HTMLDivElement = document.createElement("div");
+    var text: HTMLInputElement = document.createElement("input");
+    text.name = this.name;
+    text.value = this.value;
+    text.id = NewGlobalId();
+    div.appendChild(text);
+    var button: HTMLButtonElement = document.createElement("button");
+    button.innerText = "Set";
+    button.onclick = function () {
+      this.value = text.value;
+    }.bind(this);
+    div.appendChild(button);
+    var label: HTMLLabelElement = document.createElement("label");
+    label.innerText = this.name;
+    label.htmlFor = text.id;
+    div.appendChild(label);
+    return div;
+  }
+  
+}
+
 export class Settings {
   private render_cache_invalidated: boolean = false;
   private _main_canvas: HTMLCanvasElement;
@@ -193,6 +239,8 @@ export class Settings {
   
   constructor(main_canvas: HTMLCanvasElement) {
     this._main_canvas = main_canvas;
+    this.operations.push(new StringSetting("x ≡ 2 % 0", "x/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
+    this.operations.push(new StringSetting("x ≡ 2 % 1", "(3n*x+1n)/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
   }
 
   // Actual settings:
@@ -250,6 +298,7 @@ export class Settings {
     BaseSetting.INVALIDATE_RENDER_CACHE,
     this
   );
+  operations: BaseSetting<any>[] = [];
 
   CheckCacheInvalidation(): boolean {
     if (this.render_cache_invalidated) {
@@ -373,18 +422,14 @@ export class KeyboardControls {
 
 export class SettingsPanel {
   settings_div: HTMLDivElement;
-  constructor(settings: Settings, parent: HTMLElement, hidden: boolean = true) {
+  constructor(settings: BaseSetting<any>[], parent: HTMLElement, hidden: boolean = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
     parent.appendChild(this.settings_div);
     if (hidden) {
       this.settings_div.style.display = "none";
     }
-    this.settings_div.appendChild(settings.reverse.controller);
-    this.settings_div.appendChild(settings.run.controller);
-    this.settings_div.appendChild(settings.base.controller);
-    this.settings_div.appendChild(settings.block_size.controller);
-    this.settings_div.appendChild(settings.render_mode.controller);
+    settings.forEach(x => this.settings_div.append(x.controller));
   }
 
   hide(): void {

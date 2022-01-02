@@ -475,7 +475,14 @@ class Runner {
     this.container.appendChild(this.main_canvas.canvas);
     document.body.appendChild(this.container); // Init settings and keyboard controls:
 
-    this.settings_panel = new _settings.SettingsPanel(this.settings, this.container);
+    var panel_settings = [];
+    panel_settings.push(this.settings.reverse);
+    panel_settings.push(this.settings.run);
+    panel_settings.push(this.settings.base);
+    panel_settings.push(this.settings.block_size);
+    panel_settings.push(this.settings.render_mode);
+    panel_settings.push(...this.settings.operations);
+    this.settings_panel = new _settings.SettingsPanel(panel_settings, this.container);
     this.keyboard_controls = new _settings.KeyboardControls(this.settings, canvas);
     globalThis.main_canvas = this.main_canvas;
     globalThis.parsebigint = _number_utils.parsebigint;
@@ -622,15 +629,41 @@ class DataViewer {
 }
 
 class StepOperator {
-  static Next(settings, current) {
-    if (current.number % 2n == 0n) {
-      return new HistoryElement(settings, current.number / 2n, 0);
-    } else if (current.number % 2n == 1n) {
-      return new HistoryElement(settings, current.number * 3n + 1n, 1);
-    } else {
-      console.log("This shouldn't happen");
-      return new HistoryElement(settings, 0n, -1);
+  operations;
+  mod;
+
+  Recompile(operations) {
+    var compiled = [];
+
+    for (var op = 0; op < operations.length; op++) {
+      var c = new Function('x', '"use strict"; return ' + operations[op]);
+      compiled.push(c);
     }
+
+    this.operations = compiled;
+  }
+
+  static Compile(operations) {
+    var compiled = [];
+
+    for (var op = 0; op < operations.length; op++) {
+      var c = new Function('x', '"use strict"; return ' + operations[op]);
+      compiled.push(c);
+    }
+
+    return new StepOperator(compiled);
+  }
+
+  constructor(operations) {
+    this.operations = operations;
+    this.mod = BigInt(operations.length);
+  }
+
+  Next(settings, current) {
+    var mod_result = current.number % this.mod;
+    var mod_result_n = Number(mod_result);
+    var next = this.operations[Number(mod_result_n)](current.number);
+    return new HistoryElement(settings, next, mod_result_n);
   }
 
 }
@@ -643,6 +676,7 @@ class MainCanvas {
   p_width;
   p_height;
   settings;
+  step_operator;
 
   constructor(settings, canvas, container) {
     this.settings = settings;
@@ -650,7 +684,17 @@ class MainCanvas {
     this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
+    this.step_operator = StepOperator.Compile(this.GetOperations());
+    this.settings.operations.forEach(x => x.AddListner(function (t) {
+      this.step_operator.Recompile(this.GetOperations());
+    }.bind(this)));
     window.requestAnimationFrame(this.Draw.bind(this));
+  }
+
+  GetOperations() {
+    var res = [];
+    this.settings.operations.forEach(x => res.push(x.value));
+    return res;
   }
 
   RestartWith(starting_number) {
@@ -671,7 +715,7 @@ class MainCanvas {
     this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
 
     if (this.settings.run.value && this.history.length > 0) {
-      this.history.Add(StepOperator.Next(this.settings, this.history.current));
+      this.history.Add(this.step_operator.Next(this.settings, this.history.current));
       this.history.TrimDown(this.canvas.height / this.settings.block_size.value * 2);
     }
 
@@ -870,7 +914,7 @@ globalThis.parsebigint = parsebigint;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.SettingsPanel = exports.Settings = exports.KeyboardControls = void 0;
+exports.SettingsPanel = exports.Settings = exports.KeyboardControls = exports.BaseSetting = void 0;
 
 var _number_renderer = require("./number_renderer");
 
@@ -889,12 +933,17 @@ class BaseSetting {
   _controller = null;
   invalidate_render_cache;
   _value;
+  listeners = [];
 
   constructor(name, value, invalidate_render_cache, parent_settings) {
     this.name = name;
     this._value = value;
     this.parent_settings = parent_settings;
     this.invalidate_render_cache = invalidate_render_cache;
+  }
+
+  AddListner(f) {
+    this.listeners.push(f);
   }
 
   get value() {
@@ -916,9 +965,16 @@ class BaseSetting {
 
     this._value = value;
     this.UpdateController();
+
+    for (var i = 0; i < this.listeners.length; i++) {
+      console.log("called listener!");
+      this.listeners[i](value);
+    }
   }
 
 }
+
+exports.BaseSetting = BaseSetting;
 
 class MinMaxSetting extends BaseSetting {
   min;
@@ -1043,6 +1099,40 @@ class ArraySetting extends MinMaxSetting {
 
 }
 
+class StringSetting extends BaseSetting {
+  constructor(name, value, invalidate_render_cache, settings) {
+    super(name, value, invalidate_render_cache, settings);
+  }
+
+  UpdateController() {
+    var input = this.controller.childNodes[0];
+    input.value = this.value;
+  }
+
+  ControllerConstructor() {
+    var div = document.createElement("div");
+    var text = document.createElement("input");
+    text.name = this.name;
+    text.value = this.value;
+    text.id = NewGlobalId();
+    div.appendChild(text);
+    var button = document.createElement("button");
+    button.innerText = "Set";
+
+    button.onclick = function () {
+      this.value = text.value;
+    }.bind(this);
+
+    div.appendChild(button);
+    var label = document.createElement("label");
+    label.innerText = this.name;
+    label.htmlFor = text.id;
+    div.appendChild(label);
+    return div;
+  }
+
+}
+
 class Settings {
   render_cache_invalidated = false;
   _main_canvas;
@@ -1053,6 +1143,8 @@ class Settings {
 
   constructor(main_canvas) {
     this._main_canvas = main_canvas;
+    this.operations.push(new StringSetting("x ≡ 2 % 0", "x/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
+    this.operations.push(new StringSetting("x ≡ 2 % 1", "(3n*x+1n)/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
   } // Actual settings:
 
 
@@ -1064,6 +1156,7 @@ class Settings {
   block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
   reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  operations = [];
 
   CheckCacheInvalidation() {
     if (this.render_cache_invalidated) {
@@ -1193,11 +1286,7 @@ class SettingsPanel {
       this.settings_div.style.display = "none";
     }
 
-    this.settings_div.appendChild(settings.reverse.controller);
-    this.settings_div.appendChild(settings.run.controller);
-    this.settings_div.appendChild(settings.base.controller);
-    this.settings_div.appendChild(settings.block_size.controller);
-    this.settings_div.appendChild(settings.render_mode.controller);
+    settings.forEach(x => this.settings_div.append(x.controller));
   }
 
   hide() {
