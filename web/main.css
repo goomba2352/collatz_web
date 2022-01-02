@@ -1,17 +1,40 @@
-#main_canvas {
+html {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
+  background-color: rgb(10, 10, 10);
+  color:rgb(187, 200, 64);
+  font-family: monospace;
+}
+
+div.canvas-container {
+  position: absolute;
+  top:0px;
+  bottom: 70px;
+  left: 0px;
+  right: 0px;
+}
+
+.checkbox {
+  width: 25px;
+  height: 25px;
+  border-color: rgb(187, 200, 64);
+  color: rgb(187, 200, 64);
+}
+
+canvas {
   left: 0px;
   right: 0px;
   top: 0px;
   margin: 0;
   padding: 0;
+  position: absolute;
 }
 
-body {
-  background-color: rgb(10, 10, 10);
-  margin: 0;
-  padding: 0;
-  color:rgb(187, 200, 64);
-  font-family: monospace;
+canvas:focus {
+  outline: none;
 }
 
 input, button {
@@ -28,9 +51,14 @@ input, button {
   width: 100%;
 }
 
-#settings {
+#tool-bar {
   height: 40px;
   display: flex;
+  position: absolute;
+  bottom: 0px;
+  left:0px;
+  right:0px;
+  padding: 15px;
 }
 
 #value_div {
@@ -39,10 +67,7 @@ input, button {
 
 #button_div {
   height: 100%;
-  min-width: 112px;
-  flex-basis: 120px;
 }
-
 
 #restart {
   margin-left: 10px;
@@ -50,11 +75,20 @@ input, button {
 
 
 div.popup_settings {
+  display: table;
   position:absolute;
-  right:  0px;
-  top : 0px;
-  background-color: rgb(10,10,10);
-  border-color: rgb(187, 200, 64);
+  right:  15px;
+  bottom : 0px;
+  background-color: rgba(40,40,40,.7);
+  border-color: rgba(255,255,255,.3);
+  background-color: rgba;
   border-style: solid;
-  border-width: 1px;
+  color: rgb(255,255,255);
+}
+
+div.popup_settings > div {
+  display: flex;
+  align-items: center;
+  height: 25px;
+  padding: 6px;
 }

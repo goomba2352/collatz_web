@@ -457,23 +457,40 @@ var _settings = require("./settings.js");
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class Runner {
+  version = "0.0.3 alpha";
+  container;
+  main_canvas;
+  settings;
+  settings_panel;
+  keyboard_controls;
+
   constructor() {
-    this.version = "0.0.2 alpha";
-    this.settings = new _settings.Settings();
-    this.settings_panel = new _settings.SettingsPanel(this.settings);
-    this.size_adjust = new _settings.MinMaxKeyboardAdjuster(this.settings.block_size, _settings.Key.of('z'), _settings.Key.of('x'));
-    this.base_adjust = new _settings.MinMaxKeyboardAdjuster(this.settings.base, _settings.Key.of('a'), _settings.Key.of('s'));
-    this.render_mode = new _settings.MinMaxKeyboardAdjuster(this.settings.render_mode, _settings.Key.of(','), _settings.Key.of('.'));
-    this.pause = new _settings.BooleanKeyboardAdjuster(this.settings.run, _settings.Key.of(' '));
-    this.reverse = new _settings.BooleanKeyboardAdjuster(this.settings.reverse, _settings.Key.of('r'));
-    this.main_canvas = new MainCanvas(this.settings, document.getElementById("main_canvas"));
-    this.settings.parent_canvas_reference = this.main_canvas.canvas;
+    // Create container and canvas:
+    this.container = document.createElement("div");
+    this.container.classList.add("canvas-container");
+    var canvas = document.createElement("canvas");
+    canvas.tabIndex = 1;
+    this.settings = new _settings.Settings(canvas);
+    this.main_canvas = new MainCanvas(this.settings, canvas, this.container);
+    this.container.appendChild(this.main_canvas.canvas);
+    document.body.appendChild(this.container); // Init settings and keyboard controls:
+
+    this.settings_panel = new _settings.SettingsPanel(this.settings, this.container);
+    this.keyboard_controls = new _settings.KeyboardControls(this.settings, canvas);
     globalThis.main_canvas = this.main_canvas;
     globalThis.parsebigint = _number_utils.parsebigint;
-    var restart_button = document.getElementById("restart");
+    var seed_input = document.getElementById("initial_value");
+    seed_input.addEventListener("keyup", function (event) {
+      if (event.keyCode === 13) {
+        // Enter
+        event.preventDefault();
+        seed_button.click();
+      }
+    }.bind(this)); // Set up seed button
 
-    restart_button.onclick = function () {
-      var seed_input = document.getElementById("initial_value");
+    var seed_button = document.getElementById("restart");
+
+    seed_button.onclick = function () {
       this.main_canvas.RestartWith(eval(seed_input.value));
     }.bind(this);
 
@@ -489,9 +506,13 @@ class Runner {
 }
 
 class HistoryElement {
+  number;
+  cached_string = null;
+  op;
+  bitmap;
+  cache_hash = null;
+
   constructor(settings, number, op) {
-    this.cached_string = null;
-    this.cache_hash = null;
     this.number = number;
     this.op = op;
     this.bitmap = document.createElement("canvas");
@@ -512,7 +533,7 @@ class HistoryElement {
     }
 
     if (redraw && render_mode.is_history_view_type) {
-      this.bitmap.width = settings.parent_canvas_reference.width;
+      this.bitmap.width = settings.main_canvas.width;
       this.bitmap.height = settings.block_size.value;
       render_mode.Render(this.cached_string, settings, this.bitmap.getContext("2d"));
     }
@@ -521,6 +542,8 @@ class HistoryElement {
 }
 
 class History {
+  history;
+
   constructor() {
     this.history = new _denque.default();
   }
@@ -557,6 +580,8 @@ class History {
 }
 
 class DataViewer {
+  settings;
+
   constructor(settings) {
     this.settings = settings;
   }
@@ -611,9 +636,18 @@ class StepOperator {
 }
 
 class MainCanvas {
-  constructor(settings, canvas) {
+  container;
+  canvas;
+  data_viewer;
+  history;
+  p_width;
+  p_height;
+  settings;
+
+  constructor(settings, canvas, container) {
     this.settings = settings;
     this.canvas = canvas;
+    this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
     window.requestAnimationFrame(this.Draw.bind(this));
@@ -627,8 +661,8 @@ class MainCanvas {
     var context = this.canvas.getContext("2d");
     this.p_height = this.canvas.height;
     this.p_width = this.canvas.width;
-    this.canvas.height = window.innerHeight - 50;
-    this.canvas.width = window.innerWidth;
+    this.canvas.height = this.container.clientHeight;
+    this.canvas.width = this.container.clientWidth;
 
     if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
       this.settings.InvalidateRenderCache();
@@ -647,7 +681,12 @@ class MainCanvas {
 }
 
 window.onload = function () {
-  var runner = new Runner();
+  try {
+    var runner = new Runner();
+  } catch (e) {
+    alert(e);
+  }
+
   globalThis.runner = runner;
 };
 
@@ -681,71 +720,74 @@ exports.Drawing = Drawing;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.RenderMode = void 0;
-exports.RenderModes = RenderModes;
-exports.SpiralView = void 0;
+exports.SpiralView = exports.RenderMode = void 0;
 
 var _drawing = require("./drawing");
 
-let SpiralView =
-/** @class */
-(() => {
-  class SpiralView {
-    constructor(rows, cols) {
-      this.rows = [];
+class SpiralView {
+  static encoded_dirs = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+  static next_level_dir = [1, 0];
+  rows = [];
+  cursor;
+  middle_pos;
+  level;
+  needed_for_next_level;
+  inner_level_tracker;
 
-      for (var i = 0; i < rows; i++) {
-        this.rows.push([]);
+  constructor(rows, cols) {
+    for (var i = 0; i < rows; i++) {
+      this.rows.push([]);
 
-        for (var j = 0; j < cols; j++) {
-          this.rows[i].push(null);
-        }
+      for (var j = 0; j < cols; j++) {
+        this.rows[i].push(null);
       }
-
-      this.cursor = [0, 0];
-      this.middle_pos = [Math.floor(rows / 2), Math.floor(cols / 2)];
-      this.level = 0;
-      this.needed_for_next_level = 0;
-      this.inner_level_tracker = 0;
     }
 
-    AddOne(elem) {
-      var result = false;
-      var position = [this.middle_pos[0] + this.cursor[0], this.middle_pos[1] + this.cursor[1]];
+    this.cursor = [0, 0];
+    this.middle_pos = [Math.floor(rows / 2), Math.floor(cols / 2)];
+    this.level = 0;
+    this.needed_for_next_level = 0;
+    this.inner_level_tracker = 0;
+  }
 
-      if (position[0] >= 0 && position[0] < this.rows.length && position[1] >= 0 && position[1] < this.rows[0].length) {
-        result = true;
-        this.rows[position[0]][position[1]] = elem;
-      }
+  AddOne(elem) {
+    var result = false;
+    var position = [this.middle_pos[0] + this.cursor[0], this.middle_pos[1] + this.cursor[1]];
 
-      this.inner_level_tracker++;
+    if (position[0] >= 0 && position[0] < this.rows.length && position[1] >= 0 && position[1] < this.rows[0].length) {
+      result = true;
+      this.rows[position[0]][position[1]] = elem;
+    }
 
-      if (this.inner_level_tracker >= this.needed_for_next_level) {
-        this.level += 1;
-        this.needed_for_next_level += 8;
-        this.inner_level_tracker = 0;
-        this.cursor = [this.cursor[0] + SpiralView.next_level_dir[0], this.cursor[1] + SpiralView.next_level_dir[1]];
-        return result;
-      }
+    this.inner_level_tracker++;
 
-      var dir = SpiralView.encoded_dirs[Math.floor(this.inner_level_tracker / Math.floor(this.needed_for_next_level / 4))];
-      this.cursor = [this.cursor[0] + dir[0], this.cursor[1] + dir[1]];
+    if (this.inner_level_tracker >= this.needed_for_next_level) {
+      this.level += 1;
+      this.needed_for_next_level += 8;
+      this.inner_level_tracker = 0;
+      this.cursor = [this.cursor[0] + SpiralView.next_level_dir[0], this.cursor[1] + SpiralView.next_level_dir[1]];
       return result;
     }
 
+    var dir = SpiralView.encoded_dirs[Math.floor(this.inner_level_tracker / Math.floor(this.needed_for_next_level / 4))];
+    this.cursor = [this.cursor[0] + dir[0], this.cursor[1] + dir[1]];
+    return result;
   }
 
-  SpiralView.encoded_dirs = [[0, 1], [-1, 0], [0, -1], [1, 0]];
-  SpiralView.next_level_dir = [1, 0];
-  return SpiralView;
-})();
+}
 
 exports.SpiralView = SpiralView;
 
 class RenderMode {
+  is_history_view_type = false;
+  name;
+
   constructor(history_view_type, name) {
-    this.is_history_view_type = false;
     this.is_history_view_type = history_view_type;
+  }
+
+  static RegisteredModes() {
+    return [new HistoryViewMode(), new SpiralViewMode()];
   }
 
 }
@@ -808,10 +850,6 @@ class SpiralViewMode extends RenderMode {
 
 }
 
-function RenderModes() {
-  return [new HistoryViewMode(), new SpiralViewMode()];
-}
-
 },{"./drawing":3}],5:[function(require,module,exports){
 "use strict";
 
@@ -832,7 +870,7 @@ globalThis.parsebigint = parsebigint;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.SettingsPanel = exports.Settings = exports.MinMaxSetting = exports.MinMaxKeyboardAdjuster = exports.Key = exports.BooleanSetting = exports.BooleanKeyboardAdjuster = exports.ArraySetting = void 0;
+exports.SettingsPanel = exports.Settings = exports.KeyboardControls = void 0;
 
 var _number_renderer = require("./number_renderer");
 
@@ -843,50 +881,52 @@ function NewGlobalId() {
   return "gId" + globalId;
 }
 
-let BaseSetting =
-/** @class */
-(() => {
-  class BaseSetting {
-    constructor(name, value, invalidate_render_cache, parent_settings) {
-      this._controller = null;
-      this.name = name;
-      this._value = value;
-      this.parent_settings = parent_settings;
-      this.invalidate_render_cache = invalidate_render_cache;
-    }
+class BaseSetting {
+  name;
+  static INVALIDATE_RENDER_CACHE = true;
+  static DO_NOT_INVALIDATE_CACHE = false;
+  parent_settings;
+  _controller = null;
+  invalidate_render_cache;
+  _value;
 
-    get value() {
-      return this._value;
-    }
-
-    get controller() {
-      if (this._controller == null) {
-        this._controller = this.ControllerConstructor();
-      }
-
-      return this._controller;
-    }
-
-    set value(value) {
-      if (this.invalidate_render_cache) {
-        this.parent_settings.InvalidateRenderCache();
-      }
-
-      this._value = value;
-      this.UpdateController();
-    }
-
+  constructor(name, value, invalidate_render_cache, parent_settings) {
+    this.name = name;
+    this._value = value;
+    this.parent_settings = parent_settings;
+    this.invalidate_render_cache = invalidate_render_cache;
   }
 
-  BaseSetting.INVALIDATE_RENDER_CACHE = true;
-  BaseSetting.DO_NOT_INVALIDATE_CACHE = false;
-  return BaseSetting;
-})();
+  get value() {
+    return this._value;
+  }
+
+  get controller() {
+    if (this._controller == null) {
+      this._controller = this.ControllerConstructor();
+    }
+
+    return this._controller;
+  }
+
+  set value(value) {
+    if (this.invalidate_render_cache) {
+      this.parent_settings.InvalidateRenderCache();
+    }
+
+    this._value = value;
+    this.UpdateController();
+  }
+
+}
 
 class MinMaxSetting extends BaseSetting {
+  min;
+  max;
+  delta = 1;
+
   constructor(name, min, max, default_value, invalidate_render_cache, settings, delta = 1) {
     super(name, default_value, invalidate_render_cache, settings);
-    this.delta = 1;
     this.min = min;
     this.max = max;
     this.delta = delta;
@@ -945,8 +985,6 @@ class MinMaxSetting extends BaseSetting {
 
 }
 
-exports.MinMaxSetting = MinMaxSetting;
-
 class BooleanSetting extends BaseSetting {
   constructor(name, value, invalidate_render_cache, settings) {
     super(name, value, invalidate_render_cache, settings);
@@ -970,6 +1008,7 @@ class BooleanSetting extends BaseSetting {
     cb.type = "checkbox";
     cb.name = this.name;
     cb.id = NewGlobalId();
+    cb.classList.add("checkbox");
     cb.checked = this.value;
     cb.addEventListener("change", function () {
       this.value = cb.checked;
@@ -990,9 +1029,9 @@ class BooleanSetting extends BaseSetting {
 
 }
 
-exports.BooleanSetting = BooleanSetting;
-
 class ArraySetting extends MinMaxSetting {
+  values;
+
   constructor(name, default_index, values, invalidate_render_cache, settings) {
     super(name, 0, values.length - 1, default_index, invalidate_render_cache, settings);
     this.values = values;
@@ -1004,23 +1043,30 @@ class ArraySetting extends MinMaxSetting {
 
 }
 
-exports.ArraySetting = ArraySetting;
-
 class Settings {
-  constructor() {
-    this.render_cache_invalidated = false;
-    this.bgColor = [0, 0, 0];
-    this.baseColors = new Map([["0", [50, 50, 50]], ["1", [128, 0, 0]], ["2", [0, 128, 0]], ["3", [128, 128, 0]], ["4", [0, 0, 128]], ["5", [128, 0, 128]], ["6", [0, 0, 128]], ["7", [128, 128, 128]], ["8", [200, 200, 200]], ["9", [200, 0, 0]], ["a", [0, 200, 0]], ["b", [200, 200, 0]], ["c", [0, 0, 200]], ["d", [200, 0, 200]], ["e", [0, 0, 200]], ["f", [255, 255, 255]]]);
-    this.base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
-    this.render_mode = new ArraySetting("renderer", 1, (0, _number_renderer.RenderModes)(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
-    this.block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
-    this.run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
-    this.reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  render_cache_invalidated = false;
+  _main_canvas;
+
+  get main_canvas() {
+    return this._main_canvas;
   }
+
+  constructor(main_canvas) {
+    this._main_canvas = main_canvas;
+  } // Actual settings:
+
+
+  bgColor = [0, 0, 0];
+  baseColors = new Map([["0", [50, 50, 50]], ["1", [128, 0, 0]], ["2", [0, 128, 0]], ["3", [128, 128, 0]], ["4", [0, 0, 128]], ["5", [128, 0, 128]], ["6", [0, 0, 128]], ["7", [128, 128, 128]], ["8", [200, 200, 200]], ["9", [200, 0, 0]], ["a", [0, 200, 0]], ["b", [200, 200, 0]], ["c", [0, 0, 200]], ["d", [200, 0, 200]], ["e", [0, 0, 200]], ["f", [255, 255, 255]] // F
+  ]);
+  base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  render_mode = new ArraySetting("renderer", 1, _number_renderer.RenderMode.RegisteredModes(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
 
   CheckCacheInvalidation() {
     if (this.render_cache_invalidated) {
-      console.log("Render Cache Invalidated!");
       this.render_cache_invalidated = false;
       return true;
     }
@@ -1043,10 +1089,11 @@ class Settings {
 exports.Settings = Settings;
 
 class Key {
+  ctrl = false;
+  shift = false;
+  key = null;
+
   constructor(key) {
-    this.ctrl = false;
-    this.shift = false;
-    this.key = null;
     this.key = key;
   }
 
@@ -1078,14 +1125,16 @@ class Key {
 
 }
 
-exports.Key = Key;
-
 class MinMaxKeyboardAdjuster {
-  constructor(setting, decKey, incKey) {
+  setting;
+  decKey;
+  incKey;
+
+  constructor(setting, decKey, incKey, parent) {
     this.setting = setting;
     this.decKey = decKey;
     this.incKey = incKey;
-    document.addEventListener("keydown", function (event) {
+    parent.addEventListener("keydown", function (event) {
       if (this.decKey.matches(event)) {
         this.setting.decrement();
       } else if (this.incKey.matches(event)) {
@@ -1096,13 +1145,15 @@ class MinMaxKeyboardAdjuster {
 
 }
 
-exports.MinMaxKeyboardAdjuster = MinMaxKeyboardAdjuster;
-
 class BooleanKeyboardAdjuster {
-  constructor(setting, key) {
+  setting;
+  key;
+  invalidate_render_cache;
+
+  constructor(setting, key, parent) {
     this.setting = setting;
     this.key = key;
-    document.addEventListener("keydown", function (event) {
+    parent.addEventListener("keydown", function (event) {
       if (this.key.matches(event)) {
         this.setting.toggle();
       }
@@ -1111,13 +1162,32 @@ class BooleanKeyboardAdjuster {
 
 }
 
-exports.BooleanKeyboardAdjuster = BooleanKeyboardAdjuster;
+class KeyboardControls {
+  block_size;
+  base;
+  render_mode;
+  pause;
+  reverse;
+
+  constructor(settings, parent) {
+    this.block_size = new MinMaxKeyboardAdjuster(settings.block_size, Key.of("z"), Key.of("x"), parent);
+    this.base = new MinMaxKeyboardAdjuster(settings.base, Key.of("a"), Key.of("s"), parent);
+    this.render_mode = new MinMaxKeyboardAdjuster(settings.render_mode, Key.of(","), Key.of("."), parent);
+    this.pause = new BooleanKeyboardAdjuster(settings.run, Key.of(" "), parent);
+    this.reverse = new BooleanKeyboardAdjuster(settings.reverse, Key.of("r"), parent);
+  }
+
+}
+
+exports.KeyboardControls = KeyboardControls;
 
 class SettingsPanel {
-  constructor(settings, hidden = true) {
+  settings_div;
+
+  constructor(settings, parent, hidden = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
-    document.body.append(this.settings_div);
+    parent.appendChild(this.settings_div);
 
     if (hidden) {
       this.settings_div.style.display = "none";

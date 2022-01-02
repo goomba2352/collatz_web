@@ -73,6 +73,10 @@ export abstract class RenderMode {
   }
 
   abstract Render(number_string: string, settings: Settings, context: CanvasRenderingContext2D);
+
+  static RegisteredModes() : RenderMode[] {
+    return [new HistoryViewMode(), new SpiralViewMode()];
+  }
 }
 
 class HistoryViewMode extends RenderMode {
@@ -142,8 +146,4 @@ class SpiralViewMode extends RenderMode {
       }
     }
   }
-}
-
-export function RenderModes() : RenderMode[] {
-  return [new HistoryViewMode(), new SpiralViewMode()];
 }

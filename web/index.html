@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 
 <head>
+  <title>Collatz Animator</title>
   <link rel="stylesheet" href="./main.css">
   <script type="module" src="./app_web.js"></script>
+  <link rel="icon" href="./favicon.png" type="image/gif">
 </head>
 
-<body><canvas id="main_canvas"></canvas>
-<div id="settings">
-  <div id="value_div">
-    <input id="initial_value" value="parsebigint('11100001'.repeat(2000), 2);">
+<body>
+  <div id="tool-bar">
+    <div id="value_div">
+      <input id="initial_value" value="parsebigint('11100001'.repeat(2000), 2);">
+    </div>
+    <div id="button_div">
+      <button id="restart">Seed</button>
+      <button id="more">More</button>
+    </div>
   </div>
-  <div id="button_div">
-    <button id="restart">Seed</button>
-    <button id="more">More</button>
-  </div>
-</div>
 </body>
 
 </html>

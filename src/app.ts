@@ -1,29 +1,50 @@
 import Denque from "denque";
 import { Drawing } from "./drawing.js";
 import { parsebigint } from "./number_utils.js";
-import { Settings, MinMaxKeyboardAdjuster, Key, BooleanKeyboardAdjuster, SettingsPanel } from "./settings.js";
+import { KeyboardControls, Settings, SettingsPanel } from "./settings.js";
 import {RenderMode, SpiralView} from "./number_renderer.js";
 
 class Runner {
-  version: String = "0.0.2 alpha";
+  version: String = "0.0.3 alpha";
+  container: HTMLDivElement;
   main_canvas: MainCanvas;
-  settings: Settings = new Settings();
-  settings_panel: SettingsPanel = new SettingsPanel(this.settings);
-  size_adjust : MinMaxKeyboardAdjuster = new MinMaxKeyboardAdjuster(this.settings.block_size, Key.of('z'), Key.of('x'));
-  base_adjust : MinMaxKeyboardAdjuster = new MinMaxKeyboardAdjuster(this.settings.base, Key.of('a'), Key.of('s'));  
-  render_mode : MinMaxKeyboardAdjuster = new MinMaxKeyboardAdjuster(this.settings.render_mode, Key.of(','), Key.of('.'));  
-  pause : BooleanKeyboardAdjuster = new BooleanKeyboardAdjuster(this.settings.run, Key.of(' '));
-  reverse : BooleanKeyboardAdjuster = new BooleanKeyboardAdjuster(this.settings.reverse, Key.of('r'));
+  settings: Settings;
+  settings_panel: SettingsPanel;
+  keyboard_controls: KeyboardControls;
+ 
   constructor() {
-    this.main_canvas = new MainCanvas(this.settings, document.getElementById("main_canvas") as HTMLCanvasElement);
-    this.settings.parent_canvas_reference = this.main_canvas.canvas;
+    // Create container and canvas:
+    this.container = document.createElement("div");
+    this.container.classList.add("canvas-container");
+    var canvas: HTMLCanvasElement = document.createElement("canvas");
+    canvas.tabIndex = 1;
+    this.settings = new Settings(canvas);
+    this.main_canvas = new MainCanvas(
+      this.settings,
+      canvas,
+      this.container
+    );
+    this.container.appendChild(this.main_canvas.canvas);
+    document.body.appendChild(this.container);
+    
+    // Init settings and keyboard controls:
+    this.settings_panel = new SettingsPanel(this.settings, this.container);
+    this.keyboard_controls = new KeyboardControls(this.settings, canvas);
+
     globalThis.main_canvas = this.main_canvas;
     globalThis.parsebigint = parsebigint;
-    var restart_button: HTMLButtonElement = document.getElementById("restart") as HTMLButtonElement;
-    restart_button.onclick = function () {
-      var seed_input: HTMLInputElement = document.getElementById(
-        "initial_value"
-      ) as HTMLInputElement;
+
+    var seed_input: HTMLInputElement = document.getElementById("initial_value") as HTMLInputElement;
+    seed_input.addEventListener("keyup", (function(event) {
+      if (event.keyCode === 13) { // Enter
+        event.preventDefault();
+        seed_button.click();
+      }
+    }).bind(this));
+
+    // Set up seed button
+    var seed_button: HTMLButtonElement = document.getElementById("restart") as HTMLButtonElement;
+    seed_button.onclick = function () {
       this.main_canvas.RestartWith(eval(seed_input.value) as bigint);
     }.bind(this);
     var more_button: HTMLButtonElement = document.getElementById("more") as HTMLButtonElement;
@@ -58,7 +79,7 @@ class HistoryElement {
       this.cache_hash = cache_hash;
     }
     if (redraw && render_mode.is_history_view_type) {
-      this.bitmap.width = settings.parent_canvas_reference.width;
+      this.bitmap.width = settings.main_canvas.width;
       this.bitmap.height = settings.block_size.value;
       render_mode.Render(this.cached_string, settings, this.bitmap.getContext("2d"));
     }
@@ -164,6 +185,7 @@ class StepOperator {
 }
 
 class MainCanvas {
+  container: HTMLDivElement;
   canvas: HTMLCanvasElement;
   data_viewer: DataViewer;
   history: History;
@@ -171,9 +193,10 @@ class MainCanvas {
   p_height: number;
   settings: Settings;
 
-  constructor(settings: Settings, canvas: HTMLCanvasElement) {
+  constructor(settings: Settings, canvas: HTMLCanvasElement, container: HTMLDivElement) {
     this.settings = settings;
     this.canvas = canvas;
+    this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
     window.requestAnimationFrame(this.Draw.bind(this));
@@ -185,10 +208,10 @@ class MainCanvas {
 
   Draw() {
     var context: CanvasRenderingContext2D = this.canvas.getContext("2d");
-    this.p_height = this.canvas.height;
+    this.p_height = this.canvas.height
     this.p_width = this.canvas.width;
-    this.canvas.height = window.innerHeight - 50;
-    this.canvas.width = window.innerWidth;
+    this.canvas.height = this.container.clientHeight;
+    this.canvas.width = this.container.clientWidth;
     if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
       this.settings.InvalidateRenderCache();
     }
@@ -203,6 +226,10 @@ class MainCanvas {
 
 
 window.onload = function() {
+  try {
   var runner : Runner = new Runner();
+  } catch (e) {
+    alert(e);
+  }
   globalThis.runner = runner;
 }

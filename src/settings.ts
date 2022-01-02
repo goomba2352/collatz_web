@@ -1,4 +1,4 @@
-import { RenderMode, RenderModes } from "./number_renderer";
+import { RenderMode } from "./number_renderer";
 
 var globalId = -1;
 function NewGlobalId(): string {
@@ -47,7 +47,7 @@ abstract class BaseSetting<T> {
   protected abstract ControllerConstructor(): HTMLElement;
 }
 
-export class MinMaxSetting extends BaseSetting<number> {
+class MinMaxSetting extends BaseSetting<number> {
   private min: number;
   private max: number;
   private delta: number = 1;
@@ -118,7 +118,7 @@ export class MinMaxSetting extends BaseSetting<number> {
   }
 }
 
-export class BooleanSetting extends BaseSetting<boolean> {
+class BooleanSetting extends BaseSetting<boolean> {
   constructor(name: string, value: boolean, invalidate_render_cache: boolean, settings: Settings) {
     super(name, value, invalidate_render_cache, settings);
   }
@@ -141,6 +141,7 @@ export class BooleanSetting extends BaseSetting<boolean> {
     cb.type = "checkbox";
     cb.name = this.name;
     cb.id = NewGlobalId();
+    cb.classList.add("checkbox");
     cb.checked = this.value;
     cb.addEventListener(
       "change",
@@ -163,7 +164,7 @@ export class BooleanSetting extends BaseSetting<boolean> {
   }
 }
 
-export class ArraySetting<T> extends MinMaxSetting {
+class ArraySetting<T> extends MinMaxSetting {
   values: T[];
   constructor(
     name: string,
@@ -183,7 +184,18 @@ export class ArraySetting<T> extends MinMaxSetting {
 
 export class Settings {
   private render_cache_invalidated: boolean = false;
-  parent_canvas_reference: HTMLCanvasElement;
+  private _main_canvas: HTMLCanvasElement;
+  
+  get main_canvas() : HTMLCanvasElement {
+    return this._main_canvas;
+  }
+
+  
+  constructor(main_canvas: HTMLCanvasElement) {
+    this._main_canvas = main_canvas;
+  }
+
+  // Actual settings:
   bgColor: [number, number, number] = [0, 0, 0];
   baseColors: Map<String, [number, number, number]> = new Map([
     ["0", [50, 50, 50]], //    0
@@ -214,7 +226,7 @@ export class Settings {
   render_mode: ArraySetting<RenderMode> = new ArraySetting(
     "renderer",
     1,
-    RenderModes(),
+    RenderMode.RegisteredModes(),
     BaseSetting.INVALIDATE_RENDER_CACHE,
     this
   );
@@ -241,7 +253,6 @@ export class Settings {
 
   CheckCacheInvalidation(): boolean {
     if (this.render_cache_invalidated) {
-      console.log("Render Cache Invalidated!");
       this.render_cache_invalidated = false;
       return true;
     }
@@ -252,8 +263,6 @@ export class Settings {
     this.render_cache_invalidated = true;
   }
 
-  constructor() {}
-
   // Add values to PreProcessCacheHash() if they affect the output of the number.
   // e.g. Reversing the number and it's base affects this, where as the view mode or size do not.
   PreProcessCacheHash(): string {
@@ -261,7 +270,7 @@ export class Settings {
   }
 }
 
-export class Key {
+class Key {
   ctrl: boolean = false;
   shift: boolean = false;
   key: string = null;
@@ -295,16 +304,16 @@ export class Key {
   }
 }
 
-export class MinMaxKeyboardAdjuster {
+class MinMaxKeyboardAdjuster {
   setting: MinMaxSetting;
   decKey: Key;
   incKey: Key;
 
-  constructor(setting: MinMaxSetting, decKey: Key, incKey: Key) {
+  constructor(setting: MinMaxSetting, decKey: Key, incKey: Key, parent: HTMLElement) {
     this.setting = setting;
     this.decKey = decKey;
     this.incKey = incKey;
-    document.addEventListener(
+    parent.addEventListener(
       "keydown",
       function (event: KeyboardEvent) {
         if (this.decKey.matches(event)) {
@@ -317,15 +326,15 @@ export class MinMaxKeyboardAdjuster {
   }
 }
 
-export class BooleanKeyboardAdjuster {
+class BooleanKeyboardAdjuster {
   setting: BooleanSetting;
   key: Key;
   invalidate_render_cache: boolean;
 
-  constructor(setting: BooleanSetting, key: Key) {
+  constructor(setting: BooleanSetting, key: Key, parent: HTMLElement) {
     this.setting = setting;
     this.key = key;
-    document.addEventListener(
+    parent.addEventListener(
       "keydown",
       function (event: KeyboardEvent) {
         if (this.key.matches(event)) {
@@ -336,12 +345,38 @@ export class BooleanKeyboardAdjuster {
   }
 }
 
+export class KeyboardControls {
+  block_size: MinMaxKeyboardAdjuster;
+  base: MinMaxKeyboardAdjuster;
+  render_mode: MinMaxKeyboardAdjuster;
+  pause: BooleanKeyboardAdjuster;
+  reverse: BooleanKeyboardAdjuster;
+
+  constructor(settings: Settings, parent: HTMLElement) {
+    this.block_size = new MinMaxKeyboardAdjuster(
+      settings.block_size,
+      Key.of("z"),
+      Key.of("x"),
+      parent
+    );
+    this.base = new MinMaxKeyboardAdjuster(settings.base, Key.of("a"), Key.of("s"), parent);
+    this.render_mode = new MinMaxKeyboardAdjuster(
+      settings.render_mode,
+      Key.of(","),
+      Key.of("."),
+      parent
+    );
+    this.pause = new BooleanKeyboardAdjuster(settings.run, Key.of(" "), parent);
+    this.reverse = new BooleanKeyboardAdjuster(settings.reverse, Key.of("r"), parent);
+  }
+}
+
 export class SettingsPanel {
   settings_div: HTMLDivElement;
-  constructor(settings: Settings, hidden: boolean = true) {
+  constructor(settings: Settings, parent: HTMLElement, hidden: boolean = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
-    document.body.append(this.settings_div);
+    parent.appendChild(this.settings_div);
     if (hidden) {
       this.settings_div.style.display = "none";
     }
