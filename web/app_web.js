@@ -485,19 +485,24 @@ class Runner {
     }.bind(this); // Init settings and keyboard controls:
 
 
+    this.settings_panel = new _settings.SettingsPanel(this.container);
+    var renderer_tab = "Renderer";
     var render_settings = [];
     render_settings.push(this.settings.reverse);
     render_settings.push(this.settings.run);
     render_settings.push(this.settings.base);
     render_settings.push(this.settings.block_size);
     render_settings.push(this.settings.render_mode);
-    this.settings_panel = new _settings.SettingsPanel(this.container);
-    var renderer_tab = "Renderer";
     this.settings_panel.AddSettings(renderer_tab, render_settings);
+    var colors_tab = "Colors";
+    var color_settings = [];
+    color_settings.push(...this.settings.baseColors.values());
+    color_settings.push(this.settings.bgColor);
+    this.settings_panel.AddSettings(colors_tab, color_settings);
+    var x_mods_tab = "x Mods";
     var mod_settings = [];
     mod_settings.push(this.settings.mods);
     mod_settings.push(...this.settings.operations);
-    var x_mods_tab = "x Mods";
     this.settings_panel.AddSettings(x_mods_tab, mod_settings);
     var x_mods_div = this.settings_panel.tabs.get(x_mods_tab);
     this.settings.operations.forEach(x => x.AddListner(recompile));
@@ -631,7 +636,7 @@ class DataViewer {
   draw(x, y, width, height, render_context, history) {
     var redraw = this.settings.CheckCacheInvalidation(); // background
 
-    _drawing.Drawing.FillRect(render_context, x, y, width, height, this.settings.bgColor);
+    _drawing.Drawing.FillRect(render_context, x, y, width, height, this.settings.bgColor.value);
 
     var cache_hash = this.settings.PreProcessCacheHash();
 
@@ -740,9 +745,15 @@ class MainCanvas {
     window.requestAnimationFrame(this.Draw.bind(this));
   }
 
-  ShowError(source, message) {
+  ShowError(source, message, stack = null) {
     console.error("Exception from [" + source + "]:\n" + message);
-    this.errors.set(source, message);
+
+    if (stack != null) {
+      console.error("Stack trace: ");
+      console.error(stack);
+    }
+
+    this.errors.set(source, [message, stack]);
   }
 
   ClearError(source) {
@@ -757,6 +768,7 @@ class MainCanvas {
 
   Draw() {
     try {
+      var new_error = false;
       var context = this.canvas.getContext("2d");
       this.p_height = this.canvas.height;
       this.p_width = this.canvas.width;
@@ -776,7 +788,9 @@ class MainCanvas {
 
       this.ClearError(MainCanvas.THIS_ERROR_SOURCE);
     } catch (e) {
-      this.ShowError(MainCanvas.THIS_ERROR_SOURCE, e.toString());
+      if (!this.errors.has(MainCanvas.THIS_ERROR_SOURCE)) {
+        this.ShowError(MainCanvas.THIS_ERROR_SOURCE, e.toString(), e.stack);
+      }
     } finally {
       window.requestAnimationFrame(this.Draw.bind(this));
       var text = "";
@@ -924,7 +938,7 @@ class HistoryViewMode extends RenderMode {
         break;
       }
 
-      var number_color = settings.baseColors.get(number_string[j]);
+      var number_color = settings.baseColors.get(number_string[j]).value;
 
       if (number_color == null) {
         continue;
@@ -951,12 +965,12 @@ class SpiralViewMode extends RenderMode {
     for (var i = 0; i < sp.rows.length; i++) {
       for (var j = 0; j < sp.rows[i].length; j++) {
         var val = sp.rows[i][j];
-        var number_color = settings.baseColors.get(val);
 
-        if (number_color == null) {
+        if (val == null) {
           continue;
         }
 
+        var number_color = settings.baseColors.get(val).value;
         var x = j * settings.block_size.value;
         var y = i * settings.block_size.value;
 
@@ -1246,6 +1260,63 @@ class StringSetting extends BaseSetting {
 
 }
 
+class ColorSetting extends BaseSetting {
+  constructor(name, value, invalidate_render_cache, settings) {
+    super(name, value, invalidate_render_cache, settings);
+  }
+
+  RgbToHex(rgb) {
+    return "#" + rgb[0].toString(16).padStart(2, "0") + rgb[1].toString(16).padStart(2, "0") + rgb[2].toString(16).padStart(2, "0");
+  }
+
+  HexToRgb(hex) {
+    var r, g, b;
+
+    if (hex.startsWith("#")) {
+      hex = hex.substring(1);
+    }
+
+    if (hex.length == 3) {
+      r = parseInt(hex[0], 16);
+      g = parseInt(hex[1], 16);
+      b = parseInt(hex[2], 16);
+    } else if (hex.length == 6) {
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+    } else {
+      throw TypeError("Cannot convert hex to rgb: " + hex);
+    }
+
+    return [r, g, b];
+  }
+
+  UpdateController() {
+    var color = this.controller.childNodes[0];
+    color.value = this.RgbToHex(this.value);
+  }
+
+  ControllerConstructor() {
+    var div = document.createElement("div");
+    var color = document.createElement("input");
+    color.id = NewGlobalId();
+    color.type = "color";
+    color.value = this.RgbToHex(this.value);
+
+    color.onchange = function () {
+      this.value = this.HexToRgb(color.value);
+    }.bind(this);
+
+    div.appendChild(color);
+    var label = document.createElement("label");
+    label.innerText = this.name;
+    label.htmlFor = color.id;
+    div.appendChild(label);
+    return div;
+  }
+
+}
+
 class Settings {
   render_cache_invalidated = false;
   _main_canvas;
@@ -1289,8 +1360,9 @@ class Settings {
   } // Actual settings:
 
 
-  bgColor = [0, 0, 0];
-  baseColors = new Map([["0", [50, 50, 50]], ["1", [128, 0, 0]], ["2", [0, 128, 0]], ["3", [128, 128, 0]], ["4", [0, 0, 128]], ["5", [128, 0, 128]], ["6", [0, 0, 128]], ["7", [128, 128, 128]], ["8", [200, 200, 200]], ["9", [200, 0, 0]], ["a", [0, 200, 0]], ["b", [200, 200, 0]], ["c", [0, 0, 200]], ["d", [200, 0, 200]], ["e", [0, 0, 200]], ["f", [255, 255, 255]] // F
+  bgColor = new ColorSetting("background color", [0, 0, 0], BaseSetting.DO_NOT_INVALIDATE_CACHE, this); // prettier-ignore
+
+  baseColors = new Map([["0", new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["1", new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["2", new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["3", new ColorSetting("x ≡ n mod 3 ", [128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["4", new ColorSetting("x ≡ n mod 4 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["5", new ColorSetting("x ≡ n mod 5 ", [128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["6", new ColorSetting("x ≡ n mod 6 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["7", new ColorSetting("x ≡ n mod 7 ", [128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["8", new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["9", new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["a", new ColorSetting("x ≡ n mod 10", [0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["b", new ColorSetting("x ≡ n mod 11", [200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["c", new ColorSetting("x ≡ n mod 12", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["d", new ColorSetting("x ≡ n mod 13", [200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["e", new ColorSetting("x ≡ n mod 14", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["f", new ColorSetting("x ≡ n mod 15", [255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this)] // F
   ]);
   base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   render_mode = new ArraySetting("renderer", 1, _number_renderer.RenderMode.RegisteredModes(), BaseSetting.INVALIDATE_RENDER_CACHE, this);

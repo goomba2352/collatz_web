@@ -32,21 +32,28 @@ class Runner {
     var recompile: (string) => void = function (t: string) {
       this.main_canvas.step_operator.Recompile(this.settings.GetStringOperations());
     }.bind(this);
+
     // Init settings and keyboard controls:
+    this.settings_panel = new SettingsPanel(this.container);
+    var renderer_tab : string = "Renderer";
     var render_settings: BaseSetting<any>[] = [];
     render_settings.push(this.settings.reverse);
     render_settings.push(this.settings.run);
     render_settings.push(this.settings.base);
     render_settings.push(this.settings.block_size);
     render_settings.push(this.settings.render_mode);
-    this.settings_panel = new SettingsPanel(this.container);
-    var renderer_tab : string = "Renderer";
     this.settings_panel.AddSettings(renderer_tab, render_settings);
+
+    var colors_tab: string = "Colors";
+    var color_settings: BaseSetting<any>[] = [];
+    color_settings.push(...this.settings.baseColors.values());
+    color_settings.push(this.settings.bgColor);
+    this.settings_panel.AddSettings(colors_tab, color_settings);
     
+    var x_mods_tab: string = "x Mods"
     var mod_settings : BaseSetting<any>[] = []
     mod_settings.push(this.settings.mods);
     mod_settings.push(...this.settings.operations);
-    var x_mods_tab: string = "x Mods"
     this.settings_panel.AddSettings(x_mods_tab, mod_settings);
     var x_mods_div = this.settings_panel.tabs.get(x_mods_tab);
 
@@ -186,7 +193,7 @@ class DataViewer {
   ) {
     var redraw: boolean = this.settings.CheckCacheInvalidation();
     // background
-    Drawing.FillRect(render_context, x, y, width, height, this.settings.bgColor);
+    Drawing.FillRect(render_context, x, y, width, height, this.settings.bgColor.value);
     var cache_hash: string = this.settings.PreProcessCacheHash();
     for (var i = 0; i < history.all.length; i++) {
       var history_element: HistoryElement = history.all.peekAt(i);
@@ -280,7 +287,7 @@ class MainCanvas {
   p_height: number;
   settings: Settings;
   step_operator: StepOperator;
-  errors: Map<String, String> = new Map();
+  errors: Map<String, [String, any]> = new Map();
 
   static THIS_ERROR_SOURCE: string = "Animation Runner";
 
@@ -300,9 +307,14 @@ class MainCanvas {
     window.requestAnimationFrame(this.Draw.bind(this));
   }
 
-  ShowError(source: string, message: string): void {
+  ShowError(source: string, message: string, stack: any = null): void {
     console.error("Exception from [" + source + "]:\n" + message);
-    this.errors.set(source, message);
+    if (stack != null) {
+      console.error("Stack trace: ");
+      console.error(stack);
+    }
+      
+    this.errors.set(source, [message, stack]);
   }
 
   ClearError(source: string): void {
@@ -317,6 +329,7 @@ class MainCanvas {
 
   Draw() {
     try {
+      var new_error: boolean = false;
       var context: CanvasRenderingContext2D = this.canvas.getContext("2d");
       this.p_height = this.canvas.height;
       this.p_width = this.canvas.width;
@@ -332,7 +345,9 @@ class MainCanvas {
       }
       this.ClearError(MainCanvas.THIS_ERROR_SOURCE);
     } catch (e) {
-      this.ShowError(MainCanvas.THIS_ERROR_SOURCE, e.toString());
+      if (!this.errors.has(MainCanvas.THIS_ERROR_SOURCE)) {
+        this.ShowError(MainCanvas.THIS_ERROR_SOURCE, e.toString(), e.stack);
+      }
     } finally {
       window.requestAnimationFrame(this.Draw.bind(this));
       var text: string = "";

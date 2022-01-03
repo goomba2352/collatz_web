@@ -94,7 +94,7 @@ class HistoryViewMode extends RenderMode {
       if (x > render_context.canvas.width) {
         break;
       }
-      var number_color: [number, number, number] = settings.baseColors.get(number_string[j]);
+      var number_color: [number, number, number] = settings.baseColors.get(number_string[j]).value;
       if (number_color == null) {
         continue;
       }
@@ -129,10 +129,10 @@ class SpiralViewMode extends RenderMode {
     for (var i = 0; i < sp.rows.length; i++) {
       for (var j = 0; j < sp.rows[i].length; j++) {
         var val: string = sp.rows[i][j];
-        var number_color: [number, number, number] = settings.baseColors.get(val);
-        if (number_color == null) {
+        if (val == null) {
           continue;
         }
+        var number_color: [number, number, number] = settings.baseColors.get(val).value;
         var x: number = j * settings.block_size.value;
         var y: number = i * settings.block_size.value;
         Drawing.FillRect(
