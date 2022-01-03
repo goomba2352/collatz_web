@@ -1,7 +1,7 @@
 import Denque from "denque";
 import { Drawing } from "./drawing.js";
 import { parsebigint } from "./number_utils.js";
-import { BaseSetting, KeyboardControls, Settings, SettingsPanel } from "./settings.js";
+import { BaseSetting, ColorPresetsControl, KeyboardControls, Settings, SettingsPanel } from "./settings.js";
 import { RenderMode, SpiralView } from "./number_renderer.js";
 
 class Runner {
@@ -46,7 +46,7 @@ class Runner {
 
     var colors_tab: string = "Colors";
     var color_settings: BaseSetting<any>[] = [];
-
+    this.settings_panel.AddGenericControl(colors_tab, new ColorPresetsControl().GetControl(this.settings));
     for (var key in this.settings.baseColors) {
       color_settings.push(this.settings.baseColors[key]);
     }

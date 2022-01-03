@@ -496,7 +496,12 @@ class Runner {
     this.settings_panel.AddSettings(renderer_tab, render_settings);
     var colors_tab = "Colors";
     var color_settings = [];
-    color_settings.push(...this.settings.baseColors.values());
+    this.settings_panel.AddGenericControl(colors_tab, new _settings.ColorPresetsControl().GetControl(this.settings));
+
+    for (var key in this.settings.baseColors) {
+      color_settings.push(this.settings.baseColors[key]);
+    }
+
     color_settings.push(this.settings.bgColor);
     this.settings_panel.AddSettings(colors_tab, color_settings);
     var x_mods_tab = "x Mods";
@@ -518,6 +523,21 @@ class Runner {
       old_operations.forEach(x => x.destruct());
       recompile(value.toString());
     }.bind(this));
+    this.settings.base.AddListner(function (value) {
+      var i = 0;
+
+      for (var key in this.settings.baseColors) {
+        if (i < value) {
+          this.settings.baseColors[key].controller.style.display = "block";
+        } else {
+          this.settings.baseColors[key].controller.style.display = "none";
+        }
+
+        i++;
+      }
+    }.bind(this),
+    /*call_immediately=*/
+    true);
     this.keyboard_controls = new _settings.KeyboardControls(this.settings, canvas);
     globalThis.main_canvas = this.main_canvas;
     globalThis.parsebigint = _number_utils.parsebigint;
@@ -938,7 +958,7 @@ class HistoryViewMode extends RenderMode {
         break;
       }
 
-      var number_color = settings.baseColors.get(number_string[j]).value;
+      var number_color = settings.baseColors[number_string[j]].value;
 
       if (number_color == null) {
         continue;
@@ -970,7 +990,7 @@ class SpiralViewMode extends RenderMode {
           continue;
         }
 
-        var number_color = settings.baseColors.get(val).value;
+        var number_color = settings.baseColors[val].value;
         var x = j * settings.block_size.value;
         var y = i * settings.block_size.value;
 
@@ -1019,7 +1039,7 @@ globalThis.parsebigint = parsebigint;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.SettingsPanel = exports.Settings = exports.KeyboardControls = exports.BaseSetting = void 0;
+exports.SettingsPanel = exports.Settings = exports.KeyboardControls = exports.ColorPresetsControl = exports.BaseSetting = void 0;
 
 var _number_renderer = require("./number_renderer");
 
@@ -1047,8 +1067,12 @@ class BaseSetting {
     this.invalidate_render_cache = invalidate_render_cache;
   }
 
-  AddListner(f) {
+  AddListner(f, call_immediately = false) {
     this.listeners.push(f);
+
+    if (call_immediately) {
+      f(this.value);
+    }
   }
 
   get value() {
@@ -1072,7 +1096,6 @@ class BaseSetting {
     this.UpdateController();
 
     for (var i = 0; i < this.listeners.length; i++) {
-      console.log("called listener!");
       this.listeners[i](value);
     }
   }
@@ -1317,6 +1340,58 @@ class ColorSetting extends BaseSetting {
 
 }
 
+class ColorPresetsControl {
+  GetControl(settings) {
+    var div = document.createElement("div");
+    var gray_button = document.createElement("button");
+    gray_button.innerText = "Grayscale";
+
+    gray_button.onclick = function () {
+      var base = settings.base.value;
+      var i = 0;
+
+      for (var key in settings.baseColors) {
+        if (i < base) {
+          var color = [Math.floor(255 * (i / (base - 1))), Math.floor(255 * (i / (base - 1))), Math.floor(255 * (i / (base - 1)))];
+          console.log(key + "=" + color);
+          settings.baseColors[key].value = color;
+        } else {
+          break;
+        }
+
+        i++;
+      }
+    }.bind(this);
+
+    var random_button = document.createElement("button");
+    random_button.innerText = "Random";
+
+    random_button.onclick = function () {
+      var base = settings.base.value;
+      var i = 0;
+
+      for (var key in settings.baseColors) {
+        if (i < base) {
+          var color = [Math.floor(255 * Math.random()), Math.floor(255 * Math.random()), Math.floor(255 * Math.random())];
+          console.log(key + "=" + color);
+          settings.baseColors[key].value = color;
+        } else {
+          break;
+        }
+
+        i++;
+      }
+    }.bind(this);
+
+    div.appendChild(gray_button);
+    div.appendChild(random_button);
+    return div;
+  }
+
+}
+
+exports.ColorPresetsControl = ColorPresetsControl;
+
 class Settings {
   render_cache_invalidated = false;
   _main_canvas;
@@ -1362,8 +1437,25 @@ class Settings {
 
   bgColor = new ColorSetting("background color", [0, 0, 0], BaseSetting.DO_NOT_INVALIDATE_CACHE, this); // prettier-ignore
 
-  baseColors = new Map([["0", new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["1", new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["2", new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["3", new ColorSetting("x ≡ n mod 3 ", [128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["4", new ColorSetting("x ≡ n mod 4 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["5", new ColorSetting("x ≡ n mod 5 ", [128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["6", new ColorSetting("x ≡ n mod 6 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["7", new ColorSetting("x ≡ n mod 7 ", [128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["8", new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["9", new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["a", new ColorSetting("x ≡ n mod 10", [0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["b", new ColorSetting("x ≡ n mod 11", [200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["c", new ColorSetting("x ≡ n mod 12", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["d", new ColorSetting("x ≡ n mod 13", [200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["e", new ColorSetting("x ≡ n mod 14", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], ["f", new ColorSetting("x ≡ n mod 15", [255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this)] // F
-  ]);
+  baseColors = {
+    "0": new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "1": new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "2": new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "3": new ColorSetting("x ≡ n mod 3 ", [128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "4": new ColorSetting("x ≡ n mod 4 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "5": new ColorSetting("x ≡ n mod 5 ", [128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "6": new ColorSetting("x ≡ n mod 6 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "7": new ColorSetting("x ≡ n mod 7 ", [128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "8": new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "9": new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "a": new ColorSetting("x ≡ n mod 10", [0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "b": new ColorSetting("x ≡ n mod 11", [200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "c": new ColorSetting("x ≡ n mod 12", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "d": new ColorSetting("x ≡ n mod 13", [200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "e": new ColorSetting("x ≡ n mod 14", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
+    "f": new ColorSetting("x ≡ n mod 15", [255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this) // F
+
+  };
   base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   render_mode = new ArraySetting("renderer", 1, _number_renderer.RenderMode.RegisteredModes(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
   block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
@@ -1553,6 +1645,14 @@ class SettingsPanel {
 
   AddSettings(tab, settings) {
     settings.forEach(x => this.AddSetting(tab, x));
+  }
+
+  AddGenericControl(tab, control) {
+    if (!this.tabs.has(tab)) {
+      this.AddTab(tab);
+    }
+
+    this.tabs.get(tab).append(control);
   }
 
   hide() {

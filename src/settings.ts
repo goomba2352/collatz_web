@@ -304,6 +304,55 @@ class ColorSetting extends BaseSetting<[number, number, number]> {
   }
 }
 
+export class ColorPresetsControl {
+  GetControl(settings: Settings): HTMLElement {
+    var div: HTMLDivElement = document.createElement("div");
+    var gray_button: HTMLButtonElement = document.createElement("button");
+    gray_button.innerText = "Grayscale";
+    gray_button.onclick = function () {
+      var base: number = settings.base.value;
+      var i = 0;
+      for (var key in settings.baseColors) {
+        if (i < base) {
+          var color: [number, number, number] = [
+            Math.floor(255 * (i / (base - 1))),
+            Math.floor(255 * (i / (base - 1))),
+            Math.floor(255 * (i / (base - 1))),
+          ];
+          console.log(key + "=" + color);
+          settings.baseColors[key].value = color;
+        } else {
+          break;
+        }
+        i++;
+      }
+    }.bind(this);
+    var random_button: HTMLButtonElement = document.createElement("button");
+    random_button.innerText = "Random";
+    random_button.onclick = function () {
+      var base: number = settings.base.value;
+      var i = 0;
+      for (var key in settings.baseColors) {
+        if (i < base) {
+          var color: [number, number, number] = [
+            Math.floor(255 * Math.random()),
+            Math.floor(255 * Math.random()),
+            Math.floor(255 * Math.random()),
+          ];
+          console.log(key + "=" + color);
+          settings.baseColors[key].value = color;
+        } else {
+          break;
+        }
+        i++;
+      }
+    }.bind(this);
+    div.appendChild(gray_button);
+    div.appendChild(random_button);
+    return div;
+  }
+}
+
 export class Settings {
   private render_cache_invalidated: boolean = false;
   private _main_canvas: HTMLCanvasElement;
@@ -591,6 +640,13 @@ export class SettingsPanel {
 
   AddSettings(tab: string, settings: BaseSetting<any>[]): void {
     settings.forEach((x) => this.AddSetting(tab, x));
+  }
+
+  AddGenericControl(tab: string, control: HTMLElement) {
+    if (!this.tabs.has(tab)) {
+      this.AddTab(tab);
+    }
+    this.tabs.get(tab).append(control);
   }
 
   hide(): void {
