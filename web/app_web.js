@@ -462,6 +462,7 @@ class Runner {
   main_canvas;
   settings;
   settings_panel;
+  step_operator;
   keyboard_controls;
 
   constructor() {
@@ -471,9 +472,15 @@ class Runner {
     var canvas = document.createElement("canvas");
     canvas.tabIndex = 1;
     this.settings = new _settings.Settings(canvas);
-    this.main_canvas = new MainCanvas(this.settings, canvas, this.container);
+    this.step_operator = StepOperator.Compile(this.settings.GetStringOperations());
+    this.main_canvas = new MainCanvas(this.settings, this.step_operator, canvas, this.container);
     this.container.appendChild(this.main_canvas.canvas);
-    document.body.appendChild(this.container); // Init settings and keyboard controls:
+    document.body.appendChild(this.container);
+
+    var recompile = function (t) {
+      this.step_operator.Recompile(this.settings.GetStringOperations());
+    }.bind(this); // Init settings and keyboard controls:
+
 
     var panel_settings = [];
     panel_settings.push(this.settings.reverse);
@@ -481,8 +488,22 @@ class Runner {
     panel_settings.push(this.settings.base);
     panel_settings.push(this.settings.block_size);
     panel_settings.push(this.settings.render_mode);
+    panel_settings.push(this.settings.mods);
     panel_settings.push(...this.settings.operations);
     this.settings_panel = new _settings.SettingsPanel(panel_settings, this.container);
+    this.settings.operations.forEach(x => x.AddListner(recompile));
+    this.settings.mods.AddListner(function (value) {
+      var value;
+      var old_operations = this.settings.ConstructDefaultOperationsAndGetOldOperations(value);
+
+      for (var i = 0; i < this.settings.operations.length; i++) {
+        this.settings_panel.settings_div.insertBefore(this.settings.operations[i].controller, old_operations[0].controller);
+        this.settings.operations[i].AddListner(recompile);
+      }
+
+      old_operations.forEach(x => x.destruct());
+      recompile(value.toString());
+    }.bind(this));
     this.keyboard_controls = new _settings.KeyboardControls(this.settings, canvas);
     globalThis.main_canvas = this.main_canvas;
     globalThis.parsebigint = _number_utils.parsebigint;
@@ -523,6 +544,7 @@ class HistoryElement {
     this.number = number;
     this.op = op;
     this.bitmap = document.createElement("canvas");
+    console.log(op);
     this.Update(settings, true, settings.PreProcessCacheHash());
   }
 
@@ -636,10 +658,12 @@ class StepOperator {
     var compiled = [];
 
     for (var op = 0; op < operations.length; op++) {
-      var c = new Function('x', '"use strict"; return ' + operations[op]);
+      var c = new Function("x", '"use strict"; return ' + operations[op]);
       compiled.push(c);
     }
 
+    this.mod = BigInt(compiled.length);
+    console.log("Compiled " + compiled.length + " operations");
     this.operations = compiled;
   }
 
@@ -647,7 +671,7 @@ class StepOperator {
     var compiled = [];
 
     for (var op = 0; op < operations.length; op++) {
-      var c = new Function('x', '"use strict"; return ' + operations[op]);
+      var c = new Function("x", '"use strict"; return ' + operations[op]);
       compiled.push(c);
     }
 
@@ -678,23 +702,14 @@ class MainCanvas {
   settings;
   step_operator;
 
-  constructor(settings, canvas, container) {
+  constructor(settings, step_operator, canvas, container) {
     this.settings = settings;
     this.canvas = canvas;
     this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
-    this.step_operator = StepOperator.Compile(this.GetOperations());
-    this.settings.operations.forEach(x => x.AddListner(function (t) {
-      this.step_operator.Recompile(this.GetOperations());
-    }.bind(this)));
+    this.step_operator = step_operator;
     window.requestAnimationFrame(this.Draw.bind(this));
-  }
-
-  GetOperations() {
-    var res = [];
-    this.settings.operations.forEach(x => res.push(x.value));
-    return res;
   }
 
   RestartWith(starting_number) {
@@ -972,6 +987,12 @@ class BaseSetting {
     }
   }
 
+  destruct() {
+    if (this.controller != null) {
+      this.controller.remove();
+    }
+  }
+
 }
 
 exports.BaseSetting = BaseSetting;
@@ -1141,10 +1162,38 @@ class Settings {
     return this._main_canvas;
   }
 
+  GetStringOperations() {
+    var res = [];
+    this.operations.forEach(x => res.push(x.value));
+    return res;
+  }
+
+  ConstructDefaultOperationsAndGetOldOperations(value) {
+    var new_operations = [];
+    var old_operations = this.operations;
+
+    for (var i = 0; i < value; i++) {
+      var name = "x ≡ " + value + " % " + i;
+      var op_string = "";
+
+      if (i == 0) {
+        op_string = "x / " + value + "n";
+      } else {
+        var n_1 = BigInt(value) + 1n;
+        op_string = "(" + n_1 + "n * x + " + (value - i) + "n) / " + value + "n";
+      }
+
+      var op = new StringSetting(name, op_string, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+      new_operations.push(op);
+    }
+
+    this.operations = new_operations;
+    return old_operations;
+  }
+
   constructor(main_canvas) {
     this._main_canvas = main_canvas;
-    this.operations.push(new StringSetting("x ≡ 2 % 0", "x/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
-    this.operations.push(new StringSetting("x ≡ 2 % 1", "(3n*x+1n)/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
+    this.ConstructDefaultOperationsAndGetOldOperations(2);
   } // Actual settings:
 
 
@@ -1157,6 +1206,7 @@ class Settings {
   run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
   reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   operations = [];
+  mods = new MinMaxSetting("mods", 2, 16, 2, true, this);
 
   CheckCacheInvalidation() {
     if (this.render_cache_invalidated) {

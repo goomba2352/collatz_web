@@ -51,6 +51,12 @@ export abstract class BaseSetting<T> {
     }
   }
 
+  destruct() : void {
+    if (this.controller != null) {
+      this.controller.remove();
+    }
+  }
+
   protected abstract UpdateController(): void;
 
   protected abstract ControllerConstructor(): HTMLElement;
@@ -231,17 +237,43 @@ class StringSetting extends BaseSetting<string> {
 export class Settings {
   private render_cache_invalidated: boolean = false;
   private _main_canvas: HTMLCanvasElement;
-  
-  get main_canvas() : HTMLCanvasElement {
+
+  get main_canvas(): HTMLCanvasElement {
     return this._main_canvas;
   }
 
-  
+  GetStringOperations() : string[] {
+    var res : string[] = [];
+    this.operations.forEach(x => res.push(x.value));
+    return res;
+  }
+
+
+  ConstructDefaultOperationsAndGetOldOperations(value: number) : StringSetting[]  {
+    var new_operations : StringSetting[] = [];
+    var old_operations : StringSetting[] = this.operations;
+    for (var i = 0; i < value; i++) {
+      var name: string = "x ≡ " + value + " % " + i;
+
+      var op_string = "";
+      if (i == 0) {
+        op_string = "x / " + value + "n";
+      } else {
+        var n_1 : bigint = BigInt(value) + 1n;
+        op_string = "(" + n_1 + "n * x + " + (value-(i))+ "n) / " + (value) + "n";
+      }
+      var op = new StringSetting(name, op_string, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+      new_operations.push(op);
+    }
+    this.operations = new_operations;
+    return old_operations;
+  }
+
   constructor(main_canvas: HTMLCanvasElement) {
     this._main_canvas = main_canvas;
-    this.operations.push(new StringSetting("x ≡ 2 % 0", "x/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
-    this.operations.push(new StringSetting("x ≡ 2 % 1", "(3n*x+1n)/2n", BaseSetting.INVALIDATE_RENDER_CACHE, this));
+    this.ConstructDefaultOperationsAndGetOldOperations(2);
   }
+
 
   // Actual settings:
   bgColor: [number, number, number] = [0, 0, 0];
@@ -298,7 +330,8 @@ export class Settings {
     BaseSetting.INVALIDATE_RENDER_CACHE,
     this
   );
-  operations: BaseSetting<any>[] = [];
+  operations: StringSetting[] = [];
+  mods: MinMaxSetting = new MinMaxSetting("mods", 2, 16, 2, true, this);
 
   CheckCacheInvalidation(): boolean {
     if (this.render_cache_invalidated) {
@@ -431,6 +464,8 @@ export class SettingsPanel {
     }
     settings.forEach(x => this.settings_div.append(x.controller));
   }
+
+
 
   hide(): void {
     this.settings_div.style.display = "none";

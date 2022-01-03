@@ -10,6 +10,7 @@ class Runner {
   main_canvas: MainCanvas;
   settings: Settings;
   settings_panel: SettingsPanel;
+  step_operator: StepOperator;
   keyboard_controls: KeyboardControls;
 
   constructor() {
@@ -19,10 +20,14 @@ class Runner {
     var canvas: HTMLCanvasElement = document.createElement("canvas");
     canvas.tabIndex = 1;
     this.settings = new Settings(canvas);
-    this.main_canvas = new MainCanvas(this.settings, canvas, this.container);
+    this.step_operator = StepOperator.Compile(this.settings.GetStringOperations());
+
+    this.main_canvas = new MainCanvas(this.settings, this.step_operator, canvas, this.container);
     this.container.appendChild(this.main_canvas.canvas);
     document.body.appendChild(this.container);
-
+    var recompile: (string) => void = function (t: string) {
+      this.step_operator.Recompile(this.settings.GetStringOperations());
+    }.bind(this);
     // Init settings and keyboard controls:
     var panel_settings: BaseSetting<any>[] = [];
     panel_settings.push(this.settings.reverse);
@@ -30,8 +35,27 @@ class Runner {
     panel_settings.push(this.settings.base);
     panel_settings.push(this.settings.block_size);
     panel_settings.push(this.settings.render_mode);
+    panel_settings.push(this.settings.mods);
     panel_settings.push(...this.settings.operations);
     this.settings_panel = new SettingsPanel(panel_settings, this.container);
+    this.settings.operations.forEach((x) => x.AddListner(recompile));
+    this.settings.mods.AddListner(
+      function (value: number): void {
+        var value: number;
+        var old_operations: BaseSetting<string>[] =
+          this.settings.ConstructDefaultOperationsAndGetOldOperations(value);
+        for (var i = 0; i < this.settings.operations.length; i++) {
+          this.settings_panel.settings_div.insertBefore(
+            this.settings.operations[i].controller,
+            old_operations[0].controller
+          );
+          this.settings.operations[i].AddListner(recompile);
+        }
+        old_operations.forEach((x) => x.destruct());
+        recompile(value.toString());
+      }.bind(this)
+    );
+
     this.keyboard_controls = new KeyboardControls(this.settings, canvas);
 
     globalThis.main_canvas = this.main_canvas;
@@ -73,6 +97,7 @@ class HistoryElement {
     this.number = number;
     this.op = op;
     this.bitmap = document.createElement("canvas");
+    console.log(op);
     this.Update(settings, true, settings.PreProcessCacheHash());
   }
 
@@ -181,19 +206,21 @@ class StepOperator {
   operations: ((x: bigint) => bigint)[];
   mod: bigint;
 
-  Recompile(operations: string[]) : void {
+  Recompile(operations: string[]): void {
     var compiled: ((x: bigint) => bigint)[] = [];
     for (var op = 0; op < operations.length; op++) {
-      var c = new Function('x', '"use strict"; return ' + operations[op]) as (x: bigint) => bigint;
+      var c = new Function("x", '"use strict"; return ' + operations[op]) as (x: bigint) => bigint;
       compiled.push(c);
     }
+    this.mod = BigInt(compiled.length);
+    console.log("Compiled " + compiled.length + " operations");
     this.operations = compiled;
   }
 
   static Compile(operations: string[]): StepOperator {
     var compiled: ((x: bigint) => bigint)[] = [];
     for (var op = 0; op < operations.length; op++) {
-      var c = new Function('x', '"use strict"; return ' + operations[op]) as (x: bigint) => bigint;
+      var c = new Function("x", '"use strict"; return ' + operations[op]) as (x: bigint) => bigint;
       compiled.push(c);
     }
     return new StepOperator(compiled);
@@ -221,21 +248,19 @@ class MainCanvas {
   settings: Settings;
   step_operator: StepOperator;
 
-  constructor(settings: Settings, canvas: HTMLCanvasElement, container: HTMLDivElement) {
+  constructor(
+    settings: Settings,
+    step_operator: StepOperator,
+    canvas: HTMLCanvasElement,
+    container: HTMLDivElement
+  ) {
     this.settings = settings;
     this.canvas = canvas;
     this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
-    this.step_operator = StepOperator.Compile(this.GetOperations());
-    this.settings.operations.forEach(x => x.AddListner(function(t : string) {this.step_operator.Recompile(this.GetOperations())}.bind(this)));
+    this.step_operator = step_operator;
     window.requestAnimationFrame(this.Draw.bind(this));
-  }
-
-  GetOperations() : string[] {
-    var res : string[] = [];
-    this.settings.operations.forEach(x => res.push(x.value));
-    return res;
   }
 
   RestartWith(starting_number: bigint): void {
