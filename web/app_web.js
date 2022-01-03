@@ -1135,7 +1135,7 @@ class MinMaxSetting extends BaseSetting {
     input.step = this.delta.toString();
     input.value = this.value.toString();
     input.addEventListener("change", function () {
-      this.value = input.value;
+      this.value = parseInt(input.value);
     }.bind(this));
     div.appendChild(input);
     var label = document.createElement("label");

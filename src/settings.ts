@@ -126,7 +126,7 @@ class MinMaxSetting extends BaseSetting<number> {
     input.addEventListener(
       "change",
       function () {
-        this.value = input.value;
+        this.value = parseInt(input.value);
       }.bind(this)
     );
     div.appendChild(input);
