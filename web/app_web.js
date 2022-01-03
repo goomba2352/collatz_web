@@ -497,12 +497,9 @@ class Runner {
     var colors_tab = "Colors";
     var color_settings = [];
     this.settings_panel.AddGenericControl(colors_tab, new _settings.ColorPresetsControl().GetControl(this.settings));
-
-    for (var key in this.settings.baseColors) {
-      color_settings.push(this.settings.baseColors[key]);
-    }
-
+    this.settings.baseColors.forEach(x => color_settings.push(x));
     color_settings.push(this.settings.bgColor);
+    color_settings.push(this.settings.color_shift);
     this.settings_panel.AddSettings(colors_tab, color_settings);
     var x_mods_tab = "x Mods";
     var mod_settings = [];
@@ -524,16 +521,12 @@ class Runner {
       recompile(value.toString());
     }.bind(this));
     this.settings.base.AddListner(function (value) {
-      var i = 0;
-
-      for (var key in this.settings.baseColors) {
+      for (var i = 0; i < this.settings.baseColors.length; i++) {
         if (i < value) {
-          this.settings.baseColors[key].controller.style.display = "block";
+          this.settings.baseColors[i].controller.style.display = "block";
         } else {
-          this.settings.baseColors[key].controller.style.display = "none";
+          this.settings.baseColors[i].controller.style.display = "none";
         }
-
-        i++;
       }
     }.bind(this),
     /*call_immediately=*/
@@ -875,6 +868,45 @@ exports.SpiralView = exports.RenderMode = void 0;
 
 var _drawing = require("./drawing");
 
+var number_map = {
+  "0": 0,
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  "a": 10,
+  "b": 11,
+  "c": 12,
+  "d": 13,
+  "e": 14,
+  "f": 15,
+  "g": 16,
+  "h": 17,
+  "i": 18,
+  "j": 19,
+  "k": 20,
+  "l": 21,
+  "m": 22,
+  "n": 23,
+  "o": 24,
+  "p": 25,
+  "q": 26,
+  "r": 27,
+  "s": 28,
+  "t": 29,
+  "u": 30,
+  "v": 31,
+  "w": 32,
+  "x": 33,
+  "y": 34,
+  "z": 35
+};
+
 class SpiralView {
   static encoded_dirs = [[0, 1], [-1, 0], [0, -1], [1, 0]];
   static next_level_dir = [1, 0];
@@ -958,7 +990,7 @@ class HistoryViewMode extends RenderMode {
         break;
       }
 
-      var number_color = settings.baseColors[number_string[j]].value;
+      var number_color = settings.baseColors[(number_map[number_string[j]] + settings.color_shift.value) % settings.base.value].value;
 
       if (number_color == null) {
         continue;
@@ -990,7 +1022,7 @@ class SpiralViewMode extends RenderMode {
           continue;
         }
 
-        var number_color = settings.baseColors[val].value;
+        var number_color = settings.baseColors[(number_map[val] + settings.color_shift.value) % settings.base.value].value;
         var x = j * settings.block_size.value;
         var y = i * settings.block_size.value;
 
@@ -1341,6 +1373,30 @@ class ColorSetting extends BaseSetting {
 }
 
 class ColorPresetsControl {
+  // H: 0-360, S: 0-1, L: 0-1
+  // Credit: https://www.30secondsofcode.org/js/s/hsl-to-rgb, modified slightly.
+  HSLToRGB(h, s, l) {
+    if (h < 0 || h > 360) {
+      throw RangeError("h must be between 0-360, got h=" + h);
+    }
+
+    if (s < 0 || s > 1) {
+      throw RangeError("s must be between 0-1, got s=" + s);
+    }
+
+    if (l < 0 || l > 1) {
+      throw RangeError("l must be between 0-1, got l=" + l);
+    }
+
+    const k = n => (n + h / 30) % 12;
+
+    const a = s * Math.min(l, 1 - l);
+
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+
+    return [Math.floor(255 * f(0)), Math.floor(255 * f(8)), Math.floor(255 * f(4))];
+  }
+
   GetControl(settings) {
     var div = document.createElement("div");
     var gray_button = document.createElement("button");
@@ -1348,18 +1404,26 @@ class ColorPresetsControl {
 
     gray_button.onclick = function () {
       var base = settings.base.value;
-      var i = 0;
 
-      for (var key in settings.baseColors) {
+      for (var i = 0; i < base; i++) {
+        var color = [Math.floor(255 * (i / (base - 1))), Math.floor(255 * (i / (base - 1))), Math.floor(255 * (i / (base - 1)))];
+        settings.baseColors[i].value = color;
+      }
+    }.bind(this);
+
+    var chrom_button = document.createElement("button");
+    chrom_button.innerText = "Chromatic";
+
+    chrom_button.onclick = function () {
+      var base = settings.base.value;
+
+      for (var i = 0; i < base; i++) {
         if (i < base) {
-          var color = [Math.floor(255 * (i / (base - 1))), Math.floor(255 * (i / (base - 1))), Math.floor(255 * (i / (base - 1)))];
-          console.log(key + "=" + color);
-          settings.baseColors[key].value = color;
+          var color = this.HSLToRGB(360 * (i / base), 0.8, 0.62);
+          settings.baseColors[i].value = color;
         } else {
           break;
         }
-
-        i++;
       }
     }.bind(this);
 
@@ -1368,22 +1432,19 @@ class ColorPresetsControl {
 
     random_button.onclick = function () {
       var base = settings.base.value;
-      var i = 0;
 
-      for (var key in settings.baseColors) {
+      for (var i = 0; i < base; i++) {
         if (i < base) {
           var color = [Math.floor(255 * Math.random()), Math.floor(255 * Math.random()), Math.floor(255 * Math.random())];
-          console.log(key + "=" + color);
-          settings.baseColors[key].value = color;
+          settings.baseColors[i].value = color;
         } else {
           break;
         }
-
-        i++;
       }
     }.bind(this);
 
     div.appendChild(gray_button);
+    div.appendChild(chrom_button);
     div.appendChild(random_button);
     return div;
   }
@@ -1431,38 +1492,27 @@ class Settings {
 
   constructor(main_canvas) {
     this._main_canvas = main_canvas;
-    this.ConstructDefaultOperationsAndGetOldOperations(2);
+    this.ConstructDefaultOperationsAndGetOldOperations(2); // Extended support for base 36, random colors
+
+    for (var i = 0; i < 20; i++) {
+      var high_color = new ColorSetting("x ≡ n mod " + (16 + i), [Math.floor(255 * Math.random()), Math.floor(255 * Math.random()), Math.floor(255 * Math.random())], BaseSetting.INVALIDATE_RENDER_CACHE, this);
+      this.baseColors.push(high_color);
+    }
   } // Actual settings:
 
 
-  bgColor = new ColorSetting("background color", [0, 0, 0], BaseSetting.DO_NOT_INVALIDATE_CACHE, this); // prettier-ignore
+  bgColor = new ColorSetting("Background Color", [0, 0, 0], BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  color_shift = new MinMaxSetting("Color Shift", 0, 36, 0, BaseSetting.INVALIDATE_RENDER_CACHE, this); // prettier-ignore
 
-  baseColors = {
-    "0": new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "1": new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "2": new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "3": new ColorSetting("x ≡ n mod 3 ", [128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "4": new ColorSetting("x ≡ n mod 4 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "5": new ColorSetting("x ≡ n mod 5 ", [128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "6": new ColorSetting("x ≡ n mod 6 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "7": new ColorSetting("x ≡ n mod 7 ", [128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "8": new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "9": new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "a": new ColorSetting("x ≡ n mod 10", [0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "b": new ColorSetting("x ≡ n mod 11", [200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "c": new ColorSetting("x ≡ n mod 12", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "d": new ColorSetting("x ≡ n mod 13", [200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "e": new ColorSetting("x ≡ n mod 14", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),
-    "f": new ColorSetting("x ≡ n mod 15", [255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this) // F
-
-  };
-  base = new MinMaxSetting("base", 2, 16, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+  baseColors = [new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 3 ", [128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 4 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 5 ", [128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 6 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 7 ", [128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 10", [0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 11", [200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 12", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 13", [200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 14", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 15", [255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this) // F
+  ];
+  base = new MinMaxSetting("base", 2, 36, 6, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   render_mode = new ArraySetting("renderer", 1, _number_renderer.RenderMode.RegisteredModes(), BaseSetting.INVALIDATE_RENDER_CACHE, this);
   block_size = new MinMaxSetting("scale", 1, 20, 3, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
   reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   operations = [];
-  mods = new MinMaxSetting("mods", 2, 16, 2, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  mods = new MinMaxSetting("mods", 2, 36, 2, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
 
   CheckCacheInvalidation() {
     if (this.render_cache_invalidated) {

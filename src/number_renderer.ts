@@ -1,5 +1,43 @@
 import { Drawing } from "./drawing";
 import { Settings } from "./settings";
+var   number_map = {
+  "0": 0,
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  "a": 10,
+  "b": 11,
+  "c": 12,
+  "d": 13,
+  "e": 14,
+  "f": 15,
+  "g": 16,
+  "h": 17,
+  "i": 18,
+  "j": 19,
+  "k": 20,
+  "l": 21,
+  "m": 22,
+  "n": 23,
+  "o": 24,
+  "p": 25,
+  "q": 26,
+  "r": 27,
+  "s": 28,
+  "t": 29,
+  "u": 30,
+  "v": 31,
+  "w": 32,
+  "x": 33,
+  "y": 34,
+  "z": 35,
+};
 
 export class SpiralView {
   static encoded_dirs: [number, number][] = [
@@ -94,7 +132,10 @@ class HistoryViewMode extends RenderMode {
       if (x > render_context.canvas.width) {
         break;
       }
-      var number_color: [number, number, number] = settings.baseColors[number_string[j]].value;
+      var number_color: [number, number, number] =
+        settings.baseColors[
+          (number_map[number_string[j]] + settings.color_shift.value) % settings.base.value
+        ].value;
       if (number_color == null) {
         continue;
       }
@@ -132,7 +173,9 @@ class SpiralViewMode extends RenderMode {
         if (val == null) {
           continue;
         }
-        var number_color: [number, number, number] = settings.baseColors[val].value;
+        var number_color: [number, number, number] =
+          settings.baseColors[(number_map[val] + settings.color_shift.value) % settings.base.value]
+            .value;
         var x: number = j * settings.block_size.value;
         var y: number = i * settings.block_size.value;
         Drawing.FillRect(

@@ -47,11 +47,9 @@ class Runner {
     var colors_tab: string = "Colors";
     var color_settings: BaseSetting<any>[] = [];
     this.settings_panel.AddGenericControl(colors_tab, new ColorPresetsControl().GetControl(this.settings));
-    for (var key in this.settings.baseColors) {
-      color_settings.push(this.settings.baseColors[key]);
-    }
-
+    this.settings.baseColors.forEach((x) => color_settings.push(x));
     color_settings.push(this.settings.bgColor);
+    color_settings.push(this.settings.color_shift);
     this.settings_panel.AddSettings(colors_tab, color_settings);
 
     var x_mods_tab: string = "x Mods";
@@ -81,14 +79,12 @@ class Runner {
 
     this.settings.base.AddListner(
       function (value: number) {
-        var i: number = 0;
-        for (var key in this.settings.baseColors) {
+        for (var i = 0; i < this.settings.baseColors.length; i++) {
           if (i < value) {
-            this.settings.baseColors[key].controller.style.display = "block";
+            this.settings.baseColors[i].controller.style.display = "block";
           } else {
-            this.settings.baseColors[key].controller.style.display = "none";
+            this.settings.baseColors[i].controller.style.display = "none";
           }
-          i++;
         }
       }.bind(this),
       /*call_immediately=*/ true

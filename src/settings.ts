@@ -305,49 +305,73 @@ class ColorSetting extends BaseSetting<[number, number, number]> {
 }
 
 export class ColorPresetsControl {
+  // H: 0-360, S: 0-1, L: 0-1
+  // Credit: https://www.30secondsofcode.org/js/s/hsl-to-rgb, modified slightly.
+  HSLToRGB(h: number, s: number, l: number): [number, number, number] {
+    if (h < 0 || h > 360) {
+      throw RangeError("h must be between 0-360, got h=" + h);
+    }
+    if (s< 0 || s > 1) {
+      throw RangeError("s must be between 0-1, got s=" + s);
+    }
+    if (l < 0 || l > 1) {
+      throw RangeError("l must be between 0-1, got l=" + l);
+    }
+    const k = (n: number) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return [Math.floor(255 * f(0)), Math.floor(255 * f(8)), Math.floor(255 * f(4))];
+  }
   GetControl(settings: Settings): HTMLElement {
     var div: HTMLDivElement = document.createElement("div");
     var gray_button: HTMLButtonElement = document.createElement("button");
     gray_button.innerText = "Grayscale";
     gray_button.onclick = function () {
       var base: number = settings.base.value;
-      var i = 0;
-      for (var key in settings.baseColors) {
+ 
+      for (var i = 0; i < base; i++) {
+        var color: [number, number, number] = [
+          Math.floor(255 * (i / (base - 1))),
+          Math.floor(255 * (i / (base - 1))),
+          Math.floor(255 * (i / (base - 1))),
+        ];
+        settings.baseColors[i].value = color;
+      }
+    }.bind(this);
+
+    var chrom_button: HTMLButtonElement = document.createElement("button");
+    chrom_button.innerText = "Chromatic";
+    chrom_button.onclick = function () {
+      var base: number = settings.base.value;
+      for (var i = 0; i < base; i++) {
         if (i < base) {
-          var color: [number, number, number] = [
-            Math.floor(255 * (i / (base - 1))),
-            Math.floor(255 * (i / (base - 1))),
-            Math.floor(255 * (i / (base - 1))),
-          ];
-          console.log(key + "=" + color);
-          settings.baseColors[key].value = color;
+          var color = this.HSLToRGB(360 * (i / base), 0.8, 0.62);
+          settings.baseColors[i].value = color;
         } else {
           break;
         }
-        i++;
       }
     }.bind(this);
+
     var random_button: HTMLButtonElement = document.createElement("button");
     random_button.innerText = "Random";
     random_button.onclick = function () {
       var base: number = settings.base.value;
-      var i = 0;
-      for (var key in settings.baseColors) {
+      for (var i = 0; i < base; i++) {
         if (i < base) {
           var color: [number, number, number] = [
             Math.floor(255 * Math.random()),
             Math.floor(255 * Math.random()),
             Math.floor(255 * Math.random()),
           ];
-          console.log(key + "=" + color);
-          settings.baseColors[key].value = color;
+          settings.baseColors[i].value = color;
         } else {
           break;
         }
-        i++;
       }
     }.bind(this);
     div.appendChild(gray_button);
+    div.appendChild(chrom_button);
     div.appendChild(random_button);
     return div;
   }
@@ -390,38 +414,61 @@ export class Settings {
   constructor(main_canvas: HTMLCanvasElement) {
     this._main_canvas = main_canvas;
     this.ConstructDefaultOperationsAndGetOldOperations(2);
+    // Extended support for base 36, random colors
+    for (var i = 0; i < 20; i++) {
+      var high_color: ColorSetting = new ColorSetting(
+        "x ≡ n mod " + (16 + i),
+        [
+          Math.floor(255 * Math.random()),
+          Math.floor(255 * Math.random()),
+          Math.floor(255 * Math.random()),
+        ],
+        BaseSetting.INVALIDATE_RENDER_CACHE,
+        this
+      );
+      this.baseColors.push(high_color);
+    }
   }
 
   // Actual settings:
   bgColor: ColorSetting = new ColorSetting(
-    "background color",
+    "Background Color",
     [0, 0, 0],
     BaseSetting.DO_NOT_INVALIDATE_CACHE,
     this
   );
+  color_shift: MinMaxSetting = new MinMaxSetting(
+    "Color Shift",
+    0,
+    36,
+    0,
+    BaseSetting.INVALIDATE_RENDER_CACHE,
+    this
+  );
+
   // prettier-ignore
-  baseColors: { [name: string]: ColorSetting } = {
-    "0": new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 0
-    "1": new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 1
-    "2": new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 2
-    "3": new ColorSetting("x ≡ n mod 3 ",[128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 3
-    "4": new ColorSetting("x ≡ n mod 4 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // 4
-    "5": new ColorSetting("x ≡ n mod 5 ",[128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 5
-    "6": new ColorSetting("x ≡ n mod 6 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // 6
-    "7": new ColorSetting("x ≡ n mod 7 ",[128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),  // 7
-    "8": new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), // 8
-    "9": new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 9
-    "a": new ColorSetting("x ≡ n mod 10",[0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // A
-    "b": new ColorSetting("x ≡ n mod 11",[200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // B
-    "c": new ColorSetting("x ≡ n mod 12",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // C
-    "d": new ColorSetting("x ≡ n mod 13",[200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // D
-    "e": new ColorSetting("x ≡ n mod 14",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // E
-    "f": new ColorSetting("x ≡ n mod 15",[255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this),  // F
-  };
+  baseColors: ColorSetting[]= [
+    new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 0
+    new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 1
+    new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 2
+    new ColorSetting("x ≡ n mod 3 ",[128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 3
+    new ColorSetting("x ≡ n mod 4 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // 4
+    new ColorSetting("x ≡ n mod 5 ",[128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 5
+    new ColorSetting("x ≡ n mod 6 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // 6
+    new ColorSetting("x ≡ n mod 7 ",[128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),  // 7
+    new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), // 8
+    new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 9
+    new ColorSetting("x ≡ n mod 10",[0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // A
+    new ColorSetting("x ≡ n mod 11",[200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // B
+    new ColorSetting("x ≡ n mod 12",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // C
+    new ColorSetting("x ≡ n mod 13",[200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // D
+    new ColorSetting("x ≡ n mod 14",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // E
+    new ColorSetting("x ≡ n mod 15",[255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this),  // F
+  ];
   base: MinMaxSetting = new MinMaxSetting(
     "base",
     2,
-    16,
+    36,
     6,
     BaseSetting.INVALIDATE_RENDER_CACHE,
     this
@@ -457,7 +504,7 @@ export class Settings {
   mods: MinMaxSetting = new MinMaxSetting(
     "mods",
     2,
-    16,
+    36,
     2,
     BaseSetting.DO_NOT_INVALIDATE_CACHE,
     this
