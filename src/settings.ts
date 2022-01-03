@@ -24,8 +24,11 @@ export abstract class BaseSetting<T> {
     this.invalidate_render_cache = invalidate_render_cache;
   }
 
-  AddListner(f: (T) => void) {
+  AddListner(f: (T) => void, call_immediately: boolean = false) {
     this.listeners.push(f);
+    if (call_immediately) {
+      f(this.value);
+    }
   }
 
   get value(): T {
@@ -46,7 +49,6 @@ export abstract class BaseSetting<T> {
     this._value = value;
     this.UpdateController();
     for (var i = 0; i < this.listeners.length; i++) {
-      console.log("called listener!");
       this.listeners[i](value);
     }
   }
@@ -241,11 +243,16 @@ class StringSetting extends BaseSetting<string> {
 }
 
 class ColorSetting extends BaseSetting<[number, number, number]> {
-  constructor(name: string, value: [number,number, number], invalidate_render_cache: boolean, settings: Settings) {
+  constructor(
+    name: string,
+    value: [number, number, number],
+    invalidate_render_cache: boolean,
+    settings: Settings
+  ) {
     super(name, value, invalidate_render_cache, settings);
   }
 
-  private RgbToHex(rgb : [number, number, number]) {
+  private RgbToHex(rgb: [number, number, number]) {
     return (
       "#" +
       rgb[0].toString(16).padStart(2, "0") +
@@ -254,23 +261,23 @@ class ColorSetting extends BaseSetting<[number, number, number]> {
     );
   }
 
-  private HexToRgb(hex: string) : [number, number, number] {
-    var r:number, g:number, b: number
+  private HexToRgb(hex: string): [number, number, number] {
+    var r: number, g: number, b: number;
     if (hex.startsWith("#")) {
       hex = hex.substring(1);
     }
     if (hex.length == 3) {
-      r = parseInt(hex[0],16);
-      g = parseInt(hex[1],16);
-      b = parseInt(hex[2],16);
+      r = parseInt(hex[0], 16);
+      g = parseInt(hex[1], 16);
+      b = parseInt(hex[2], 16);
     } else if (hex.length == 6) {
-      r = parseInt(hex.substring(0,2),16);
-      g = parseInt(hex.substring(2,4),16);
-      b = parseInt(hex.substring(4,6),16);
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
     } else {
       throw TypeError("Cannot convert hex to rgb: " + hex);
     }
-    return [r,g,b];
+    return [r, g, b];
   }
   protected UpdateController(): void {
     var color: HTMLInputElement = this.controller.childNodes[0] as HTMLInputElement;
@@ -279,15 +286,15 @@ class ColorSetting extends BaseSetting<[number, number, number]> {
 
   protected ControllerConstructor(): HTMLElement {
     var div: HTMLDivElement = document.createElement("div");
-    var color : HTMLInputElement = document.createElement("input");
+    var color: HTMLInputElement = document.createElement("input");
     color.id = NewGlobalId();
     color.type = "color";
     color.value = this.RgbToHex(this.value);
-    color.onchange = function() {
+    color.onchange = function () {
       this.value = this.HexToRgb(color.value);
     }.bind(this);
     div.appendChild(color);
-    
+
     var label: HTMLLabelElement = document.createElement("label");
     label.innerText = this.name;
     label.htmlFor = color.id;
@@ -295,7 +302,6 @@ class ColorSetting extends BaseSetting<[number, number, number]> {
 
     return div;
   }
-
 }
 
 export class Settings {
@@ -345,24 +351,24 @@ export class Settings {
     this
   );
   // prettier-ignore
-  baseColors: Map<String, ColorSetting> = new Map([
-    ["0", new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this)],    // 0
-    ["1", new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)],     // 1
-    ["2", new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)],     // 2
-    ["3", new ColorSetting("x ≡ n mod 3 ",[128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)],    // 3
-    ["4", new ColorSetting("x ≡ n mod 4 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)],      // 4
-    ["5", new ColorSetting("x ≡ n mod 5 ",[128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)],    // 5
-    ["6", new ColorSetting("x ≡ n mod 6 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)],      // 6
-    ["7", new ColorSetting("x ≡ n mod 7 ",[128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this)],  // 7
-    ["8", new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)], // 8
-    ["9", new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)],     // 9
-    ["a", new ColorSetting("x ≡ n mod 10",[0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)],      // A
-    ["b", new ColorSetting("x ≡ n mod 11",[200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this)],    // B
-    ["c", new ColorSetting("x ≡ n mod 12",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)],      // C
-    ["d", new ColorSetting("x ≡ n mod 13",[200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)],    // D
-    ["e", new ColorSetting("x ≡ n mod 14",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this)],      // E
-    ["f", new ColorSetting("x ≡ n mod 15",[255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this)],  // F
-  ]);
+  baseColors: { [name: string]: ColorSetting } = {
+    "0": new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 0
+    "1": new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 1
+    "2": new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 2
+    "3": new ColorSetting("x ≡ n mod 3 ",[128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 3
+    "4": new ColorSetting("x ≡ n mod 4 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // 4
+    "5": new ColorSetting("x ≡ n mod 5 ",[128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // 5
+    "6": new ColorSetting("x ≡ n mod 6 ",[0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // 6
+    "7": new ColorSetting("x ≡ n mod 7 ",[128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this),  // 7
+    "8": new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), // 8
+    "9": new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),     // 9
+    "a": new ColorSetting("x ≡ n mod 10",[0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // A
+    "b": new ColorSetting("x ≡ n mod 11",[200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // B
+    "c": new ColorSetting("x ≡ n mod 12",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // C
+    "d": new ColorSetting("x ≡ n mod 13",[200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),    // D
+    "e": new ColorSetting("x ≡ n mod 14",[0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this),      // E
+    "f": new ColorSetting("x ≡ n mod 15",[255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this),  // F
+  };
   base: MinMaxSetting = new MinMaxSetting(
     "base",
     2,
@@ -574,7 +580,6 @@ export class SettingsPanel {
     }.bind(this);
     this.tab_selector.appendChild(tab_selector);
     this.container_div.appendChild(settings_div);
-  
   }
 
   AddSetting(tab: string, setting: BaseSetting<any>) {

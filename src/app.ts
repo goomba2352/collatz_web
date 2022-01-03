@@ -35,7 +35,7 @@ class Runner {
 
     // Init settings and keyboard controls:
     this.settings_panel = new SettingsPanel(this.container);
-    var renderer_tab : string = "Renderer";
+    var renderer_tab: string = "Renderer";
     var render_settings: BaseSetting<any>[] = [];
     render_settings.push(this.settings.reverse);
     render_settings.push(this.settings.run);
@@ -46,12 +46,16 @@ class Runner {
 
     var colors_tab: string = "Colors";
     var color_settings: BaseSetting<any>[] = [];
-    color_settings.push(...this.settings.baseColors.values());
+
+    for (var key in this.settings.baseColors) {
+      color_settings.push(this.settings.baseColors[key]);
+    }
+
     color_settings.push(this.settings.bgColor);
     this.settings_panel.AddSettings(colors_tab, color_settings);
-    
-    var x_mods_tab: string = "x Mods"
-    var mod_settings : BaseSetting<any>[] = []
+
+    var x_mods_tab: string = "x Mods";
+    var mod_settings: BaseSetting<any>[] = [];
     mod_settings.push(this.settings.mods);
     mod_settings.push(...this.settings.operations);
     this.settings_panel.AddSettings(x_mods_tab, mod_settings);
@@ -64,7 +68,7 @@ class Runner {
         var old_operations: BaseSetting<string>[] =
           this.settings.ConstructDefaultOperationsAndGetOldOperations(value);
         for (var i = 0; i < this.settings.operations.length; i++) {
-            x_mods_div.insertBefore(
+          x_mods_div.insertBefore(
             this.settings.operations[i].controller,
             old_operations[0].controller
           );
@@ -73,6 +77,21 @@ class Runner {
         old_operations.forEach((x) => x.destruct());
         recompile(value.toString());
       }.bind(this)
+    );
+
+    this.settings.base.AddListner(
+      function (value: number) {
+        var i: number = 0;
+        for (var key in this.settings.baseColors) {
+          if (i < value) {
+            this.settings.baseColors[key].controller.style.display = "block";
+          } else {
+            this.settings.baseColors[key].controller.style.display = "none";
+          }
+          i++;
+        }
+      }.bind(this),
+      /*call_immediately=*/ true
     );
 
     this.keyboard_controls = new KeyboardControls(this.settings, canvas);
@@ -313,7 +332,7 @@ class MainCanvas {
       console.error("Stack trace: ");
       console.error(stack);
     }
-      
+
     this.errors.set(source, [message, stack]);
   }
 
