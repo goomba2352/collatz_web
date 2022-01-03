@@ -7,10 +7,10 @@ import { RenderMode, SpiralView } from "./number_renderer.js";
 class Runner {
   version: String = "0.0.3 alpha";
   container: HTMLDivElement;
+  error_box: HTMLDivElement;
   main_canvas: MainCanvas;
   settings: Settings;
   settings_panel: SettingsPanel;
-  step_operator: StepOperator;
   keyboard_controls: KeyboardControls;
 
   constructor() {
@@ -18,15 +18,18 @@ class Runner {
     this.container = document.createElement("div");
     this.container.classList.add("canvas-container");
     var canvas: HTMLCanvasElement = document.createElement("canvas");
+    this.container.appendChild(canvas);
     canvas.tabIndex = 1;
     this.settings = new Settings(canvas);
-    this.step_operator = StepOperator.Compile(this.settings.GetStringOperations());
 
-    this.main_canvas = new MainCanvas(this.settings, this.step_operator, canvas, this.container);
-    this.container.appendChild(this.main_canvas.canvas);
+    this.error_box = document.createElement("div");
+    this.error_box.classList.add("error-box");
+    this.container.appendChild(this.error_box);
+
+    this.main_canvas = new MainCanvas(this.settings, this.error_box, canvas, this.container);
     document.body.appendChild(this.container);
     var recompile: (string) => void = function (t: string) {
-      this.step_operator.Recompile(this.settings.GetStringOperations());
+      this.main_canvas.step_operator.Recompile(this.settings.GetStringOperations());
     }.bind(this);
     // Init settings and keyboard controls:
     var panel_settings: BaseSetting<any>[] = [];
@@ -76,7 +79,12 @@ class Runner {
     // Set up seed button
     var seed_button: HTMLButtonElement = document.getElementById("restart") as HTMLButtonElement;
     seed_button.onclick = function () {
-      this.main_canvas.RestartWith(eval(seed_input.value) as bigint);
+      try {
+        this.main_canvas.RestartWith(eval(seed_input.value) as bigint);
+        this.main_canvas.ClearError("Seed Input");
+      } catch (e) {
+        this.main_canvas.ShowError("Seed Input", e.toString());
+      }
     }.bind(this);
     var more_button: HTMLButtonElement = document.getElementById("more") as HTMLButtonElement;
     more_button.onclick = function () {
@@ -204,28 +212,44 @@ class DataViewer {
 class StepOperator {
   operations: ((x: bigint) => bigint)[];
   mod: bigint;
+  main_canvas: MainCanvas;
+
+  static THIS_ERROR_SOURCE: string = "Operation Compiler";
 
   Recompile(operations: string[]): void {
-    var compiled: ((x: bigint) => bigint)[] = [];
-    for (var op = 0; op < operations.length; op++) {
-      var c = new Function("x", '"use strict"; return ' + operations[op]) as (x: bigint) => bigint;
-      compiled.push(c);
+    var op = 0;
+    try {
+      var compiled: ((x: bigint) => bigint)[] = [];
+      for (op = 0; op < operations.length; op++) {
+        var c = new Function("x", '"use strict"; return ' + operations[op]) as (
+          x: bigint
+        ) => bigint;
+        compiled.push(c);
+      }
+    } catch (e) {
+      this.main_canvas.ShowError(
+        StepOperator.THIS_ERROR_SOURCE,
+        "Compilation for mod[" + op + "] failed: " + e.toString()
+      );
+      return;
     }
+    this.main_canvas.ClearError(StepOperator.THIS_ERROR_SOURCE);
     this.mod = BigInt(compiled.length);
     console.log("Compiled " + compiled.length + " operations");
     this.operations = compiled;
   }
 
-  static Compile(operations: string[]): StepOperator {
+  static Compile(operations: string[], main_canvas: MainCanvas): StepOperator {
     var compiled: ((x: bigint) => bigint)[] = [];
     for (var op = 0; op < operations.length; op++) {
       var c = new Function("x", '"use strict"; return ' + operations[op]) as (x: bigint) => bigint;
       compiled.push(c);
     }
-    return new StepOperator(compiled);
+    return new StepOperator(compiled, main_canvas);
   }
 
-  constructor(operations: ((x: bigint) => bigint)[]) {
+  constructor(operations: ((x: bigint) => bigint)[], main_canvas: MainCanvas) {
+    this.main_canvas = main_canvas;
     this.operations = operations;
     this.mod = BigInt(operations.length);
   }
@@ -239,6 +263,7 @@ class StepOperator {
 
 class MainCanvas {
   container: HTMLDivElement;
+  error_box: HTMLDivElement;
   canvas: HTMLCanvasElement;
   data_viewer: DataViewer;
   history: History;
@@ -246,20 +271,35 @@ class MainCanvas {
   p_height: number;
   settings: Settings;
   step_operator: StepOperator;
+  errors: Map<String, String> = new Map();
+
+  static THIS_ERROR_SOURCE: string = "Animation Runner";
 
   constructor(
     settings: Settings,
-    step_operator: StepOperator,
+    error_box: HTMLDivElement,
     canvas: HTMLCanvasElement,
     container: HTMLDivElement
   ) {
     this.settings = settings;
+    this.error_box = error_box;
     this.canvas = canvas;
     this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
-    this.step_operator = step_operator;
+    this.step_operator = StepOperator.Compile(this.settings.GetStringOperations(), this);
     window.requestAnimationFrame(this.Draw.bind(this));
+  }
+
+  ShowError(source: string, message: string): void {
+    console.error("Exception from [" + source + "]:\n" + message);
+    this.errors.set(source, message);
+  }
+
+  ClearError(source: string): void {
+    if (this.errors.has(source)) {
+      this.errors.delete(source);
+    }
   }
 
   RestartWith(starting_number: bigint): void {
@@ -267,20 +307,36 @@ class MainCanvas {
   }
 
   Draw() {
-    var context: CanvasRenderingContext2D = this.canvas.getContext("2d");
-    this.p_height = this.canvas.height;
-    this.p_width = this.canvas.width;
-    this.canvas.height = this.container.clientHeight;
-    this.canvas.width = this.container.clientWidth;
-    if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
-      this.settings.InvalidateRenderCache();
+    try {
+      var context: CanvasRenderingContext2D = this.canvas.getContext("2d");
+      this.p_height = this.canvas.height;
+      this.p_width = this.canvas.width;
+      this.canvas.height = this.container.clientHeight;
+      this.canvas.width = this.container.clientWidth;
+      if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
+        this.settings.InvalidateRenderCache();
+      }
+      this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
+      if (this.settings.run.value && this.history.length > 0) {
+        this.history.Add(this.step_operator.Next(this.settings, this.history.current));
+        this.history.TrimDown((this.canvas.height / this.settings.block_size.value) * 2);
+      }
+      this.ClearError(MainCanvas.THIS_ERROR_SOURCE);
+    } catch (e) {
+      this.ShowError(MainCanvas.THIS_ERROR_SOURCE, e.toString());
+    } finally {
+      window.requestAnimationFrame(this.Draw.bind(this));
+      var text: string = "";
+      if (this.errors.size == 0) {
+        this.error_box.style.display = "none";
+      } else {
+        this.error_box.style.display = "block";
+        this.errors.forEach(
+          (message, source) => (text += "Exception from [" + source + "]:\n" + message)
+        );
+        this.error_box.innerText = text;
+      }
     }
-    this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
-    if (this.settings.run.value && this.history.length > 0) {
-      this.history.Add(this.step_operator.Next(this.settings, this.history.current));
-      this.history.TrimDown((this.canvas.height / this.settings.block_size.value) * 2);
-    }
-    window.requestAnimationFrame(this.Draw.bind(this));
   }
 }
 

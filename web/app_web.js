@@ -459,10 +459,10 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 class Runner {
   version = "0.0.3 alpha";
   container;
+  error_box;
   main_canvas;
   settings;
   settings_panel;
-  step_operator;
   keyboard_controls;
 
   constructor() {
@@ -470,15 +470,17 @@ class Runner {
     this.container = document.createElement("div");
     this.container.classList.add("canvas-container");
     var canvas = document.createElement("canvas");
+    this.container.appendChild(canvas);
     canvas.tabIndex = 1;
     this.settings = new _settings.Settings(canvas);
-    this.step_operator = StepOperator.Compile(this.settings.GetStringOperations());
-    this.main_canvas = new MainCanvas(this.settings, this.step_operator, canvas, this.container);
-    this.container.appendChild(this.main_canvas.canvas);
+    this.error_box = document.createElement("div");
+    this.error_box.classList.add("error-box");
+    this.container.appendChild(this.error_box);
+    this.main_canvas = new MainCanvas(this.settings, this.error_box, canvas, this.container);
     document.body.appendChild(this.container);
 
     var recompile = function (t) {
-      this.step_operator.Recompile(this.settings.GetStringOperations());
+      this.main_canvas.step_operator.Recompile(this.settings.GetStringOperations());
     }.bind(this); // Init settings and keyboard controls:
 
 
@@ -519,7 +521,12 @@ class Runner {
     var seed_button = document.getElementById("restart");
 
     seed_button.onclick = function () {
-      this.main_canvas.RestartWith(eval(seed_input.value));
+      try {
+        this.main_canvas.RestartWith(eval(seed_input.value));
+        this.main_canvas.ClearError("Seed Input");
+      } catch (e) {
+        this.main_canvas.ShowError("Seed Input", e.toString());
+      }
     }.bind(this);
 
     var more_button = document.getElementById("more");
@@ -652,21 +659,31 @@ class DataViewer {
 class StepOperator {
   operations;
   mod;
+  main_canvas;
+  static THIS_ERROR_SOURCE = "Operation Compiler";
 
   Recompile(operations) {
-    var compiled = [];
+    var op = 0;
 
-    for (var op = 0; op < operations.length; op++) {
-      var c = new Function("x", '"use strict"; return ' + operations[op]);
-      compiled.push(c);
+    try {
+      var compiled = [];
+
+      for (op = 0; op < operations.length; op++) {
+        var c = new Function("x", '"use strict"; return ' + operations[op]);
+        compiled.push(c);
+      }
+    } catch (e) {
+      this.main_canvas.ShowError(StepOperator.THIS_ERROR_SOURCE, "Compilation for mod[" + op + "] failed: " + e.toString());
+      return;
     }
 
+    this.main_canvas.ClearError(StepOperator.THIS_ERROR_SOURCE);
     this.mod = BigInt(compiled.length);
     console.log("Compiled " + compiled.length + " operations");
     this.operations = compiled;
   }
 
-  static Compile(operations) {
+  static Compile(operations, main_canvas) {
     var compiled = [];
 
     for (var op = 0; op < operations.length; op++) {
@@ -674,10 +691,11 @@ class StepOperator {
       compiled.push(c);
     }
 
-    return new StepOperator(compiled);
+    return new StepOperator(compiled, main_canvas);
   }
 
-  constructor(operations) {
+  constructor(operations, main_canvas) {
+    this.main_canvas = main_canvas;
     this.operations = operations;
     this.mod = BigInt(operations.length);
   }
@@ -693,6 +711,7 @@ class StepOperator {
 
 class MainCanvas {
   container;
+  error_box;
   canvas;
   data_viewer;
   history;
@@ -700,15 +719,29 @@ class MainCanvas {
   p_height;
   settings;
   step_operator;
+  errors = new Map();
+  static THIS_ERROR_SOURCE = "Animation Runner";
 
-  constructor(settings, step_operator, canvas, container) {
+  constructor(settings, error_box, canvas, container) {
     this.settings = settings;
+    this.error_box = error_box;
     this.canvas = canvas;
     this.container = container;
     this.data_viewer = new DataViewer(settings);
     this.history = new History();
-    this.step_operator = step_operator;
+    this.step_operator = StepOperator.Compile(this.settings.GetStringOperations(), this);
     window.requestAnimationFrame(this.Draw.bind(this));
+  }
+
+  ShowError(source, message) {
+    console.error("Exception from [" + source + "]:\n" + message);
+    this.errors.set(source, message);
+  }
+
+  ClearError(source) {
+    if (this.errors.has(source)) {
+      this.errors.delete(source);
+    }
   }
 
   RestartWith(starting_number) {
@@ -716,24 +749,39 @@ class MainCanvas {
   }
 
   Draw() {
-    var context = this.canvas.getContext("2d");
-    this.p_height = this.canvas.height;
-    this.p_width = this.canvas.width;
-    this.canvas.height = this.container.clientHeight;
-    this.canvas.width = this.container.clientWidth;
+    try {
+      var context = this.canvas.getContext("2d");
+      this.p_height = this.canvas.height;
+      this.p_width = this.canvas.width;
+      this.canvas.height = this.container.clientHeight;
+      this.canvas.width = this.container.clientWidth;
 
-    if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
-      this.settings.InvalidateRenderCache();
+      if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
+        this.settings.InvalidateRenderCache();
+      }
+
+      this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
+
+      if (this.settings.run.value && this.history.length > 0) {
+        this.history.Add(this.step_operator.Next(this.settings, this.history.current));
+        this.history.TrimDown(this.canvas.height / this.settings.block_size.value * 2);
+      }
+
+      this.ClearError(MainCanvas.THIS_ERROR_SOURCE);
+    } catch (e) {
+      this.ShowError(MainCanvas.THIS_ERROR_SOURCE, e.toString());
+    } finally {
+      window.requestAnimationFrame(this.Draw.bind(this));
+      var text = "";
+
+      if (this.errors.size == 0) {
+        this.error_box.style.display = "none";
+      } else {
+        this.error_box.style.display = "block";
+        this.errors.forEach((message, source) => text += "Exception from [" + source + "]:\n" + message);
+        this.error_box.innerText = text;
+      }
     }
-
-    this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
-
-    if (this.settings.run.value && this.history.length > 0) {
-      this.history.Add(this.step_operator.Next(this.settings, this.history.current));
-      this.history.TrimDown(this.canvas.height / this.settings.block_size.value * 2);
-    }
-
-    window.requestAnimationFrame(this.Draw.bind(this));
   }
 
 }
@@ -915,8 +963,26 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.parsebigint = parsebigint;
+var master = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 function parsebigint(value, radix) {
+  value = value.toLowerCase();
+
+  if (radix < 2 || radix > master.length) {
+    throw new RangeError("radix out of range, valid range: [2, " + master.length + "]");
+  }
+
+  for (var i = 0; i < value.length; i++) {
+    var c = value[i];
+    var pos = master.indexOf(c);
+
+    if (pos == -1) {
+      throw new TypeError("Character [" + c + "] cannot be parsed. Valid characters for radix=" + radix + ": [" + master.substring(0, radix).split("").join(",") + "]");
+    } else if (pos >= radix) {
+      throw new RangeError("Character [" + c + "] cannot be parsed, as it is out of range. Valid characters for radix=" + radix + ": [" + master.substring(0, radix).split("").join(",") + "]");
+    }
+  }
+
   return [...value.toString()].reduce((r, v) => r * BigInt(radix) + BigInt(parseInt(v, radix)), 0n);
 }
 
@@ -1034,6 +1100,22 @@ class MinMaxSetting extends BaseSetting {
 
   ControllerConstructor() {
     var div = document.createElement("div");
+    var minus_button = document.createElement("button");
+    minus_button.innerText = "-";
+
+    minus_button.onclick = function () {
+      this.decrement();
+    }.bind(this);
+
+    div.appendChild(minus_button);
+    var plus_button = document.createElement("button");
+    plus_button.innerText = "+";
+    div.appendChild(plus_button);
+
+    plus_button.onclick = function () {
+      this.increment();
+    }.bind(this);
+
     var input = document.createElement("input");
     input.type = "range";
     input.id = NewGlobalId();
@@ -1053,9 +1135,9 @@ class MinMaxSetting extends BaseSetting {
   }
 
   UpdateController() {
-    var input = this.controller.childNodes[0];
+    var input = this.controller.childNodes[2];
     input.value = this.value.toString();
-    var label = this.controller.childNodes[1];
+    var label = this.controller.childNodes[3];
     label.innerText = this.name + "=" + this.value;
   }
 
@@ -1324,30 +1406,34 @@ class KeyboardControls {
 exports.KeyboardControls = KeyboardControls;
 
 class SettingsPanel {
+  container_div;
   settings_div;
 
   constructor(settings, parent, hidden = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
-    parent.appendChild(this.settings_div);
+    this.container_div = document.createElement("div");
+    this.container_div.classList.add("container_popup");
+    this.container_div.appendChild(this.settings_div);
+    parent.appendChild(this.container_div);
 
     if (hidden) {
-      this.settings_div.style.display = "none";
+      this.container_div.style.display = "none";
     }
 
     settings.forEach(x => this.settings_div.append(x.controller));
   }
 
   hide() {
-    this.settings_div.style.display = "none";
+    this.container_div.style.display = "none";
   }
 
   show() {
-    this.settings_div.style.display = "block";
+    this.container_div.style.display = "block";
   }
 
   toggle() {
-    if (this.settings_div.style.display == "none") {
+    if (this.container_div.style.display == "none") {
       this.show();
       return true;
     } else {

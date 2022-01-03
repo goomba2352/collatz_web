@@ -51,7 +51,7 @@ export abstract class BaseSetting<T> {
     }
   }
 
-  destruct() : void {
+  destruct(): void {
     if (this.controller != null) {
       this.controller.remove();
     }
@@ -104,6 +104,18 @@ class MinMaxSetting extends BaseSetting<number> {
 
   ControllerConstructor(): HTMLElement {
     var div: HTMLDivElement = document.createElement("div");
+    var minus_button: HTMLButtonElement = document.createElement("button");
+    minus_button.innerText = "-";
+    minus_button.onclick = function () {
+      this.decrement();
+    }.bind(this);
+    div.appendChild(minus_button);
+    var plus_button: HTMLButtonElement = document.createElement("button");
+    plus_button.innerText = "+";
+    div.appendChild(plus_button);
+    plus_button.onclick = function () {
+      this.increment();
+    }.bind(this);
     var input: HTMLInputElement = document.createElement("input");
     input.type = "range";
     input.id = NewGlobalId();
@@ -126,9 +138,9 @@ class MinMaxSetting extends BaseSetting<number> {
   }
 
   UpdateController(): void {
-    var input: HTMLInputElement = this.controller.childNodes[0] as HTMLInputElement;
+    var input: HTMLInputElement = this.controller.childNodes[2] as HTMLInputElement;
     input.value = this.value.toString();
-    var label : HTMLLabelElement = this.controller.childNodes[1] as HTMLLabelElement;
+    var label: HTMLLabelElement = this.controller.childNodes[3] as HTMLLabelElement;
     label.innerText = this.name + "=" + this.value;
   }
 }
@@ -198,16 +210,11 @@ class ArraySetting<T> extends MinMaxSetting {
 }
 
 class StringSetting extends BaseSetting<string> {
-  constructor(
-    name: string,
-    value: string,
-    invalidate_render_cache: boolean,
-    settings: Settings
-  ) {
+  constructor(name: string, value: string, invalidate_render_cache: boolean, settings: Settings) {
     super(name, value, invalidate_render_cache, settings);
   }
-  
-  protected UpdateController(): void {    
+
+  protected UpdateController(): void {
     var input: HTMLInputElement = this.controller.childNodes[0] as HTMLInputElement;
     input.value = this.value;
   }
@@ -231,7 +238,6 @@ class StringSetting extends BaseSetting<string> {
     div.appendChild(label);
     return div;
   }
-  
 }
 
 export class Settings {
@@ -242,16 +248,15 @@ export class Settings {
     return this._main_canvas;
   }
 
-  GetStringOperations() : string[] {
-    var res : string[] = [];
-    this.operations.forEach(x => res.push(x.value));
+  GetStringOperations(): string[] {
+    var res: string[] = [];
+    this.operations.forEach((x) => res.push(x.value));
     return res;
   }
 
-
-  ConstructDefaultOperationsAndGetOldOperations(value: number) : StringSetting[]  {
-    var new_operations : StringSetting[] = [];
-    var old_operations : StringSetting[] = this.operations;
+  ConstructDefaultOperationsAndGetOldOperations(value: number): StringSetting[] {
+    var new_operations: StringSetting[] = [];
+    var old_operations: StringSetting[] = this.operations;
     for (var i = 0; i < value; i++) {
       var name: string = "x ≡ " + value + " % " + i;
 
@@ -259,8 +264,8 @@ export class Settings {
       if (i == 0) {
         op_string = "x / " + value + "n";
       } else {
-        var n_1 : bigint = BigInt(value) + 1n;
-        op_string = "(" + n_1 + "n * x + " + (value-(i))+ "n) / " + (value) + "n";
+        var n_1: bigint = BigInt(value) + 1n;
+        op_string = "(" + n_1 + "n * x + " + (value - i) + "n) / " + value + "n";
       }
       var op = new StringSetting(name, op_string, BaseSetting.INVALIDATE_RENDER_CACHE, this);
       new_operations.push(op);
@@ -273,7 +278,6 @@ export class Settings {
     this._main_canvas = main_canvas;
     this.ConstructDefaultOperationsAndGetOldOperations(2);
   }
-
 
   // Actual settings:
   bgColor: [number, number, number] = [0, 0, 0];
@@ -454,29 +458,31 @@ export class KeyboardControls {
 }
 
 export class SettingsPanel {
+  container_div: HTMLDivElement;
   settings_div: HTMLDivElement;
   constructor(settings: BaseSetting<any>[], parent: HTMLElement, hidden: boolean = true) {
     this.settings_div = document.createElement("div");
     this.settings_div.classList.add("popup_settings");
-    parent.appendChild(this.settings_div);
+    this.container_div = document.createElement("div");
+    this.container_div.classList.add("container_popup");
+    this.container_div.appendChild(this.settings_div);
+    parent.appendChild(this.container_div);
     if (hidden) {
-      this.settings_div.style.display = "none";
+      this.container_div.style.display = "none";
     }
-    settings.forEach(x => this.settings_div.append(x.controller));
+    settings.forEach((x) => this.settings_div.append(x.controller));
   }
 
-
-
   hide(): void {
-    this.settings_div.style.display = "none";
+    this.container_div.style.display = "none";
   }
 
   show(): void {
-    this.settings_div.style.display = "block";
+    this.container_div.style.display = "block";
   }
 
   toggle(): boolean {
-    if (this.settings_div.style.display == "none") {
+    if (this.container_div.style.display == "none") {
       this.show();
       return true;
     } else {
