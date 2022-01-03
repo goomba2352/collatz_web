@@ -544,7 +544,6 @@ class HistoryElement {
     this.number = number;
     this.op = op;
     this.bitmap = document.createElement("canvas");
-    console.log(op);
     this.Update(settings, true, settings.PreProcessCacheHash());
   }
 
