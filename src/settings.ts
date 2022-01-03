@@ -267,7 +267,7 @@ export class Settings {
         var n_1: bigint = BigInt(value) + 1n;
         op_string = "(" + n_1 + "n * x + " + (value - i) + "n) / " + value + "n";
       }
-      var op = new StringSetting(name, op_string, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+      var op = new StringSetting(name, op_string, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
       new_operations.push(op);
     }
     this.operations = new_operations;
@@ -335,7 +335,7 @@ export class Settings {
     this
   );
   operations: StringSetting[] = [];
-  mods: MinMaxSetting = new MinMaxSetting("mods", 2, 16, 2, true, this);
+  mods: MinMaxSetting = new MinMaxSetting("mods", 2, 16, 2, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
 
   CheckCacheInvalidation(): boolean {
     if (this.render_cache_invalidated) {
@@ -458,19 +458,63 @@ export class KeyboardControls {
 }
 
 export class SettingsPanel {
+  tab_selector: HTMLDivElement;
   container_div: HTMLDivElement;
-  settings_div: HTMLDivElement;
-  constructor(settings: BaseSetting<any>[], parent: HTMLElement, hidden: boolean = true) {
-    this.settings_div = document.createElement("div");
-    this.settings_div.classList.add("popup_settings");
+  tabs: Map<string, HTMLDivElement>;
+  selected: string;
+
+  constructor(parent: HTMLElement, hidden: boolean = true) {
+    this.tab_selector = document.createElement("div");
+    this.tab_selector.classList.add("tab-selector");
     this.container_div = document.createElement("div");
     this.container_div.classList.add("container_popup");
-    this.container_div.appendChild(this.settings_div);
-    parent.appendChild(this.container_div);
+
+    this.tabs = new Map();
+    document.createElement("div");
+
+    this.container_div.appendChild(this.tab_selector);
     if (hidden) {
       this.container_div.style.display = "none";
     }
-    settings.forEach((x) => this.settings_div.append(x.controller));
+    parent.appendChild(this.container_div);
+  }
+
+  private AddTab(tab: string): void {
+    var first_tab: boolean = false;
+    if (this.tabs.size == 0) {
+      first_tab = true;
+      this.selected = tab;
+    }
+    if (this.tabs.has(tab)) {
+      throw Error("Tab already exists: " + tab);
+    }
+    var settings_div: HTMLDivElement = document.createElement("div");
+    settings_div.classList.add("popup_settings");
+    this.tabs.set(tab, settings_div);
+    if (!first_tab) {
+      settings_div.style.display = "none";
+    }
+    var tab_selector: HTMLButtonElement = document.createElement("button");
+    tab_selector.innerText = tab;
+    tab_selector.onclick = function () {
+      this.tabs.get(this.selected).style.display = "none";
+      this.tabs.get(tab).style.display = "block";
+      this.selected = tab;
+    }.bind(this);
+    this.tab_selector.appendChild(tab_selector);
+    this.container_div.appendChild(settings_div);
+  
+  }
+
+  AddSetting(tab: string, setting: BaseSetting<any>) {
+    if (!this.tabs.has(tab)) {
+      this.AddTab(tab);
+    }
+    this.tabs.get(tab).append(setting.controller);
+  }
+
+  AddSettings(tab: string, settings: BaseSetting<any>[]): void {
+    settings.forEach((x) => this.AddSetting(tab, x));
   }
 
   hide(): void {

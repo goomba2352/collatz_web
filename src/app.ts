@@ -24,6 +24,7 @@ class Runner {
 
     this.error_box = document.createElement("div");
     this.error_box.classList.add("error-box");
+    this.error_box.style.display = "none";
     this.container.appendChild(this.error_box);
 
     this.main_canvas = new MainCanvas(this.settings, this.error_box, canvas, this.container);
@@ -32,15 +33,23 @@ class Runner {
       this.main_canvas.step_operator.Recompile(this.settings.GetStringOperations());
     }.bind(this);
     // Init settings and keyboard controls:
-    var panel_settings: BaseSetting<any>[] = [];
-    panel_settings.push(this.settings.reverse);
-    panel_settings.push(this.settings.run);
-    panel_settings.push(this.settings.base);
-    panel_settings.push(this.settings.block_size);
-    panel_settings.push(this.settings.render_mode);
-    panel_settings.push(this.settings.mods);
-    panel_settings.push(...this.settings.operations);
-    this.settings_panel = new SettingsPanel(panel_settings, this.container);
+    var render_settings: BaseSetting<any>[] = [];
+    render_settings.push(this.settings.reverse);
+    render_settings.push(this.settings.run);
+    render_settings.push(this.settings.base);
+    render_settings.push(this.settings.block_size);
+    render_settings.push(this.settings.render_mode);
+    this.settings_panel = new SettingsPanel(this.container);
+    var renderer_tab : string = "Renderer";
+    this.settings_panel.AddSettings(renderer_tab, render_settings);
+    
+    var mod_settings : BaseSetting<any>[] = []
+    mod_settings.push(this.settings.mods);
+    mod_settings.push(...this.settings.operations);
+    var x_mods_tab: string = "x Mods"
+    this.settings_panel.AddSettings(x_mods_tab, mod_settings);
+    var x_mods_div = this.settings_panel.tabs.get(x_mods_tab);
+
     this.settings.operations.forEach((x) => x.AddListner(recompile));
     this.settings.mods.AddListner(
       function (value: number): void {
@@ -48,7 +57,7 @@ class Runner {
         var old_operations: BaseSetting<string>[] =
           this.settings.ConstructDefaultOperationsAndGetOldOperations(value);
         for (var i = 0; i < this.settings.operations.length; i++) {
-          this.settings_panel.settings_div.insertBefore(
+            x_mods_div.insertBefore(
             this.settings.operations[i].controller,
             old_operations[0].controller
           );
@@ -344,7 +353,11 @@ window.onload = function () {
   try {
     var runner: Runner = new Runner();
   } catch (e) {
-    alert(e);
+    var error: HTMLDivElement = document.createElement("div");
+    error.classList.add("perma-error-box");
+    error.innerText = "A permenant error has occured:\n" + e.toString();
+    document.body.appendChild(error);
+    throw e;
   }
   globalThis.runner = runner;
 };

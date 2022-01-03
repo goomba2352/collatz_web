@@ -475,6 +475,7 @@ class Runner {
     this.settings = new _settings.Settings(canvas);
     this.error_box = document.createElement("div");
     this.error_box.classList.add("error-box");
+    this.error_box.style.display = "none";
     this.container.appendChild(this.error_box);
     this.main_canvas = new MainCanvas(this.settings, this.error_box, canvas, this.container);
     document.body.appendChild(this.container);
@@ -484,22 +485,28 @@ class Runner {
     }.bind(this); // Init settings and keyboard controls:
 
 
-    var panel_settings = [];
-    panel_settings.push(this.settings.reverse);
-    panel_settings.push(this.settings.run);
-    panel_settings.push(this.settings.base);
-    panel_settings.push(this.settings.block_size);
-    panel_settings.push(this.settings.render_mode);
-    panel_settings.push(this.settings.mods);
-    panel_settings.push(...this.settings.operations);
-    this.settings_panel = new _settings.SettingsPanel(panel_settings, this.container);
+    var render_settings = [];
+    render_settings.push(this.settings.reverse);
+    render_settings.push(this.settings.run);
+    render_settings.push(this.settings.base);
+    render_settings.push(this.settings.block_size);
+    render_settings.push(this.settings.render_mode);
+    this.settings_panel = new _settings.SettingsPanel(this.container);
+    var renderer_tab = "Renderer";
+    this.settings_panel.AddSettings(renderer_tab, render_settings);
+    var mod_settings = [];
+    mod_settings.push(this.settings.mods);
+    mod_settings.push(...this.settings.operations);
+    var x_mods_tab = "x Mods";
+    this.settings_panel.AddSettings(x_mods_tab, mod_settings);
+    var x_mods_div = this.settings_panel.tabs.get(x_mods_tab);
     this.settings.operations.forEach(x => x.AddListner(recompile));
     this.settings.mods.AddListner(function (value) {
       var value;
       var old_operations = this.settings.ConstructDefaultOperationsAndGetOldOperations(value);
 
       for (var i = 0; i < this.settings.operations.length; i++) {
-        this.settings_panel.settings_div.insertBefore(this.settings.operations[i].controller, old_operations[0].controller);
+        x_mods_div.insertBefore(this.settings.operations[i].controller, old_operations[0].controller);
         this.settings.operations[i].AddListner(recompile);
       }
 
@@ -790,7 +797,11 @@ window.onload = function () {
   try {
     var runner = new Runner();
   } catch (e) {
-    alert(e);
+    var error = document.createElement("div");
+    error.classList.add("perma-error-box");
+    error.innerText = "A permenant error has occured:\n" + e.toString();
+    document.body.appendChild(error);
+    throw e;
   }
 
   globalThis.runner = runner;
@@ -1264,7 +1275,7 @@ class Settings {
         op_string = "(" + n_1 + "n * x + " + (value - i) + "n) / " + value + "n";
       }
 
-      var op = new StringSetting(name, op_string, BaseSetting.INVALIDATE_RENDER_CACHE, this);
+      var op = new StringSetting(name, op_string, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
       new_operations.push(op);
     }
 
@@ -1287,7 +1298,7 @@ class Settings {
   run = new BooleanSetting("Run/pause", true, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
   reverse = new BooleanSetting("Reverse", true, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   operations = [];
-  mods = new MinMaxSetting("mods", 2, 16, 2, true, this);
+  mods = new MinMaxSetting("mods", 2, 16, 2, BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
 
   CheckCacheInvalidation() {
     if (this.render_cache_invalidated) {
@@ -1406,22 +1417,70 @@ class KeyboardControls {
 exports.KeyboardControls = KeyboardControls;
 
 class SettingsPanel {
+  tab_selector;
   container_div;
-  settings_div;
+  tabs;
+  selected;
 
-  constructor(settings, parent, hidden = true) {
-    this.settings_div = document.createElement("div");
-    this.settings_div.classList.add("popup_settings");
+  constructor(parent, hidden = true) {
+    this.tab_selector = document.createElement("div");
+    this.tab_selector.classList.add("tab-selector");
     this.container_div = document.createElement("div");
     this.container_div.classList.add("container_popup");
-    this.container_div.appendChild(this.settings_div);
-    parent.appendChild(this.container_div);
+    this.tabs = new Map();
+    document.createElement("div");
+    this.container_div.appendChild(this.tab_selector);
 
     if (hidden) {
       this.container_div.style.display = "none";
     }
 
-    settings.forEach(x => this.settings_div.append(x.controller));
+    parent.appendChild(this.container_div);
+  }
+
+  AddTab(tab) {
+    var first_tab = false;
+
+    if (this.tabs.size == 0) {
+      first_tab = true;
+      this.selected = tab;
+    }
+
+    if (this.tabs.has(tab)) {
+      throw Error("Tab already exists: " + tab);
+    }
+
+    var settings_div = document.createElement("div");
+    settings_div.classList.add("popup_settings");
+    this.tabs.set(tab, settings_div);
+
+    if (!first_tab) {
+      settings_div.style.display = "none";
+    }
+
+    var tab_selector = document.createElement("button");
+    tab_selector.innerText = tab;
+
+    tab_selector.onclick = function () {
+      this.tabs.get(this.selected).style.display = "none";
+      this.tabs.get(tab).style.display = "block";
+      this.selected = tab;
+    }.bind(this);
+
+    this.tab_selector.appendChild(tab_selector);
+    this.container_div.appendChild(settings_div);
+  }
+
+  AddSetting(tab, setting) {
+    if (!this.tabs.has(tab)) {
+      this.AddTab(tab);
+    }
+
+    this.tabs.get(tab).append(setting.controller);
+  }
+
+  AddSettings(tab, settings) {
+    settings.forEach(x => this.AddSetting(tab, x));
   }
 
   hide() {
