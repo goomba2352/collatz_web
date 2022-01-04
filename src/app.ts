@@ -49,6 +49,7 @@ class Runner {
     this.settings_panel.AddGenericControl(colors_tab, new ColorPresetsControl().GetControl(this.settings));
     this.settings.baseColors.forEach((x) => color_settings.push(x));
     color_settings.push(this.settings.bgColor);
+    color_settings.push(this.settings.color_shift_animator);
     color_settings.push(this.settings.color_shift);
     this.settings_panel.AddSettings(colors_tab, color_settings);
 
@@ -352,6 +353,12 @@ class MainCanvas {
       this.canvas.width = this.container.clientWidth;
       if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
         this.settings.InvalidateRenderCache();
+      }
+      if (this.settings.color_shift_animator.value) {
+        if (this.settings.color_shift.value == this.settings.base.value - 1) {
+          this.settings.color_shift.value = 0;
+        }
+        this.settings.color_shift.increment();
       }
       this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
       if (this.settings.run.value && this.history.length > 0) {

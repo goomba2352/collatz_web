@@ -311,7 +311,7 @@ export class ColorPresetsControl {
     if (h < 0 || h > 360) {
       throw RangeError("h must be between 0-360, got h=" + h);
     }
-    if (s< 0 || s > 1) {
+    if (s < 0 || s > 1) {
       throw RangeError("s must be between 0-1, got s=" + s);
     }
     if (l < 0 || l > 1) {
@@ -328,7 +328,7 @@ export class ColorPresetsControl {
     gray_button.innerText = "Grayscale";
     gray_button.onclick = function () {
       var base: number = settings.base.value;
- 
+
       for (var i = 0; i < base; i++) {
         var color: [number, number, number] = [
           Math.floor(255 * (i / (base - 1))),
@@ -435,6 +435,12 @@ export class Settings {
     "Background Color",
     [0, 0, 0],
     BaseSetting.DO_NOT_INVALIDATE_CACHE,
+    this
+  );
+  color_shift_animator: BooleanSetting = new BooleanSetting(
+    "Color Shift Animation",
+    false,
+    BaseSetting.INVALIDATE_RENDER_CACHE,
     this
   );
   color_shift: MinMaxSetting = new MinMaxSetting(

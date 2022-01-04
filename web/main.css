@@ -122,6 +122,7 @@ div.popup_settings > div {
   align-items: center;
   height: 35px;
   padding: 5px;
+  min-width: 320px;
 }
 div.popup_settings > div > * {
   margin-right: 5px;

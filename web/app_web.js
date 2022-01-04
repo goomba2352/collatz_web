@@ -499,6 +499,7 @@ class Runner {
     this.settings_panel.AddGenericControl(colors_tab, new _settings.ColorPresetsControl().GetControl(this.settings));
     this.settings.baseColors.forEach(x => color_settings.push(x));
     color_settings.push(this.settings.bgColor);
+    color_settings.push(this.settings.color_shift_animator);
     color_settings.push(this.settings.color_shift);
     this.settings_panel.AddSettings(colors_tab, color_settings);
     var x_mods_tab = "x Mods";
@@ -790,6 +791,14 @@ class MainCanvas {
 
       if (this.p_width != this.canvas.width || this.p_height != this.canvas.height) {
         this.settings.InvalidateRenderCache();
+      }
+
+      if (this.settings.color_shift_animator.value) {
+        if (this.settings.color_shift.value == this.settings.base.value - 1) {
+          this.settings.color_shift.value = 0;
+        }
+
+        this.settings.color_shift.increment();
       }
 
       this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
@@ -1502,6 +1511,7 @@ class Settings {
 
 
   bgColor = new ColorSetting("Background Color", [0, 0, 0], BaseSetting.DO_NOT_INVALIDATE_CACHE, this);
+  color_shift_animator = new BooleanSetting("Color Shift Animation", false, BaseSetting.INVALIDATE_RENDER_CACHE, this);
   color_shift = new MinMaxSetting("Color Shift", 0, 36, 0, BaseSetting.INVALIDATE_RENDER_CACHE, this); // prettier-ignore
 
   baseColors = [new ColorSetting("x ≡ n mod 0 ", [50, 50, 50], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 1 ", [128, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 2 ", [0, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 3 ", [128, 128, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 4 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 5 ", [128, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 6 ", [0, 0, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 7 ", [128, 128, 128], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 8 ", [200, 200, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 9 ", [200, 0, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 10", [0, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 11", [200, 200, 0], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 12", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 13", [200, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 14", [0, 0, 200], BaseSetting.INVALIDATE_RENDER_CACHE, this), new ColorSetting("x ≡ n mod 15", [255, 255, 255], BaseSetting.INVALIDATE_RENDER_CACHE, this) // F
