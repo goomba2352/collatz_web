@@ -794,11 +794,11 @@ class MainCanvas {
       }
 
       if (this.settings.color_shift_animator.value) {
-        if (this.settings.color_shift.value == this.settings.base.value - 1) {
+        if (this.settings.color_shift.value >= this.settings.base.value - 1) {
           this.settings.color_shift.value = 0;
+        } else {
+          this.settings.color_shift.increment();
         }
-
-        this.settings.color_shift.increment();
       }
 
       this.data_viewer.draw(0, 0, this.canvas.width, this.canvas.height, context, this.history);
