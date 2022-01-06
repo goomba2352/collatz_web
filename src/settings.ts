@@ -1,3 +1,4 @@
+import { basename } from "path/posix";
 import { RenderMode } from "./number_renderer";
 
 var globalId = -1;
@@ -307,7 +308,11 @@ class ColorSetting extends BaseSetting<[number, number, number]> {
 export class ColorPresetsControl {
   // H: 0-360, S: 0-1, L: 0-1
   // Credit: https://www.30secondsofcode.org/js/s/hsl-to-rgb, modified slightly.
-  HSLToRGB(h: number, s: number, l: number): [number, number, number] {
+  HSLToRGB(hsl_color: [number,number,number]): [number, number, number] {
+    var h: number = hsl_color[0];
+    var s: number = hsl_color[1];
+    var l: number = hsl_color[2];
+
     if (h < 0 || h > 360) {
       throw RangeError("h must be between 0-360, got h=" + h);
     }
@@ -322,6 +327,34 @@ export class ColorPresetsControl {
     const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
     return [Math.floor(255 * f(0)), Math.floor(255 * f(8)), Math.floor(255 * f(4))];
   }
+
+  // Credit: https://www.30secondsofcode.org/js/s/rgb-to-hsl, modified slightly
+  RGBToHSL(rgb_color: [number, number, number]): [number, number, number] {
+    var r:number = rgb_color[0];
+    var g: number = rgb_color[1];
+    var b: number = rgb_color[2];
+    if (r < 0 || r > 255) {
+      throw RangeError("r must be between 0-360, got h=" + r);
+    }
+    if (g < 0 || g > 255) {
+      throw RangeError("g must be between 0-1, got s=" + g);
+    }
+    if (b < b || b > 255) {
+      throw RangeError("b must be between 0-1, got l=" + b);
+    }
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const l = Math.max(r, g, b);
+    const s = l - Math.min(r, g, b);
+    const h = s ? (l === r ? (g - b) / s : l === g ? 2 + (b - r) / s : 4 + (r - g) / s) : 0;
+    return [
+      60 * h < 0 ? 60 * h + 360 : 60 * h,
+      s ? (l <= 0.5 ? s / (2 * l - s) : s / (2 - (2 * l - s))) : 0,
+      (2 * l - s) / 2,
+    ];
+  };
+
   GetControl(settings: Settings): HTMLElement {
     var div: HTMLDivElement = document.createElement("div");
     var gray_button: HTMLButtonElement = document.createElement("button");
@@ -345,13 +378,24 @@ export class ColorPresetsControl {
       var base: number = settings.base.value;
       for (var i = 0; i < base; i++) {
         if (i < base) {
-          var color = this.HSLToRGB(360 * (i / base), 0.8, 0.62);
+          var color = this.HSLToRGB([360 * (i / base), 0.9, 0.52]);
           settings.baseColors[i].value = color;
         } else {
           break;
         }
       }
     }.bind(this);
+
+    var same_button: HTMLButtonElement = document.createElement("button");
+    same_button.innerText = "Same";
+    same_button.onclick = function () {
+      var base: number = settings.base.value;
+      for (var i = 1; i < base; i++) {
+        if (i < base) {
+          settings.baseColors[i].value = settings.baseColors[0].value;
+        }
+      }
+    }
 
     var random_button: HTMLButtonElement = document.createElement("button");
     random_button.innerText = "Random";
@@ -370,9 +414,34 @@ export class ColorPresetsControl {
         }
       }
     }.bind(this);
+
+    var near_button: HTMLButtonElement = document.createElement("button");
+    near_button.innerText = "Near";
+    near_button.onclick = function () {
+      var base: number = settings.base.value;
+      var seed_color_hsl: [number, number, number] = this.RGBToHSL(settings.baseColors[0].value);
+      var h_drift: number = (Math.random()*360 - seed_color_hsl[0]) / (settings.base.value - 1);
+      var s_drift: number = (Math.random() - seed_color_hsl[1]) / (settings.base.value - 1);
+      var l_drift: number = (Math.random() - seed_color_hsl[2]) / (settings.base.value - 1);
+      for (var i = 1; i < base; i++) {
+        if (i < base) {
+          var next_hsl: [number, number, number] = [
+            seed_color_hsl[0] + h_drift * (i - 1),
+            seed_color_hsl[1] + s_drift * (i - 1),
+            seed_color_hsl[2] + l_drift * (i - 1),
+          ];
+          settings.baseColors[i].value = this.HSLToRGB(next_hsl);
+        } else {
+          break;
+        }
+      }
+    }.bind(this);
+
     div.appendChild(gray_button);
     div.appendChild(chrom_button);
     div.appendChild(random_button);
+    div.appendChild(same_button);
+    div.appendChild(near_button);
     return div;
   }
 }

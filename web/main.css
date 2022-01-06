@@ -135,8 +135,13 @@ div.tab-selector {
   border-style: solid;
   border-bottom: none;
   padding: 5px;
+  text-align: right;
 }
 
 div.tab-selector > button {
   margin-right: 5px;
+}
+
+div.table-button-layout {
+  background-color: rgb(180,0,0);
 }
