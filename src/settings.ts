@@ -355,8 +355,9 @@ export class ColorPresetsControl {
     ];
   };
 
-  GetControl(settings: Settings): HTMLElement {
-    var div: HTMLDivElement = document.createElement("div");
+  GetControls(settings: Settings): HTMLElement[] {
+    var row1: HTMLDivElement = document.createElement("div");
+    var row2: HTMLDivElement = document.createElement("div");
     var gray_button: HTMLButtonElement = document.createElement("button");
     gray_button.innerText = "Grayscale";
     gray_button.onclick = function () {
@@ -416,7 +417,7 @@ export class ColorPresetsControl {
     }.bind(this);
 
     var near_button: HTMLButtonElement = document.createElement("button");
-    near_button.innerText = "Near";
+    near_button.innerText = "Magic Gradient";
     near_button.onclick = function () {
       var base: number = settings.base.value;
       var seed_color_hsl: [number, number, number] = this.RGBToHSL(settings.baseColors[0].value);
@@ -426,9 +427,9 @@ export class ColorPresetsControl {
       for (var i = 1; i < base; i++) {
         if (i < base) {
           var next_hsl: [number, number, number] = [
-            seed_color_hsl[0] + h_drift * (i - 1),
-            seed_color_hsl[1] + s_drift * (i - 1),
-            seed_color_hsl[2] + l_drift * (i - 1),
+            seed_color_hsl[0] + h_drift * i,
+            seed_color_hsl[1] + s_drift * i,
+            seed_color_hsl[2] + l_drift * i 
           ];
           settings.baseColors[i].value = this.HSLToRGB(next_hsl);
         } else {
@@ -437,12 +438,44 @@ export class ColorPresetsControl {
       }
     }.bind(this);
 
-    div.appendChild(gray_button);
-    div.appendChild(chrom_button);
-    div.appendChild(random_button);
-    div.appendChild(same_button);
-    div.appendChild(near_button);
-    return div;
+    var near_button_circle: HTMLButtonElement = document.createElement("button");
+    near_button_circle.innerText = "Magic Gradient (repeat)";
+    near_button_circle.onclick = function () {
+      var base: number = settings.base.value;
+      var seed_color_hsl: [number, number, number] = this.RGBToHSL(settings.baseColors[0].value);
+      var h_drift: number = (Math.random()*360 - seed_color_hsl[0]) / (settings.base.value - 1);
+      var s_drift: number = (Math.random() - seed_color_hsl[1]) / (settings.base.value - 1);
+      var l_drift: number = (Math.random() - seed_color_hsl[2]) / (settings.base.value - 1);
+      for (var i = 1; i < base; i++) {
+        var next_hsl: [number, number, number];
+        if (i < base) {
+          if (i < base / 2) {
+            next_hsl = [
+              seed_color_hsl[0] + h_drift * i * 2,
+              seed_color_hsl[1] + s_drift * i * 2,
+              seed_color_hsl[2] + l_drift * i * 2,
+            ];
+          } else {
+            next_hsl = [
+              seed_color_hsl[0] + h_drift * 2 * (base - i - 1),
+              seed_color_hsl[1] + s_drift * 2 * (base - i - 1),
+              seed_color_hsl[2] + l_drift * 2 * (base - i - 1),
+            ];
+          }
+          settings.baseColors[i].value = this.HSLToRGB(next_hsl);
+        } else {
+          break;
+        }
+      }
+    }.bind(this);
+
+    row1.appendChild(gray_button);
+    row1.appendChild(chrom_button);
+    row1.appendChild(random_button);
+    row1.appendChild(same_button);
+    row2.appendChild(near_button);
+    row2.appendChild(near_button_circle);
+    return [row1, row2];
   }
 }
 
@@ -764,11 +797,11 @@ export class SettingsPanel {
     settings.forEach((x) => this.AddSetting(tab, x));
   }
 
-  AddGenericControl(tab: string, control: HTMLElement) {
+  AddGenericControl(tab: string, controls: HTMLElement[]) {
     if (!this.tabs.has(tab)) {
       this.AddTab(tab);
     }
-    this.tabs.get(tab).append(control);
+    controls.forEach(x => this.tabs.get(tab).append(x));
   }
 
   hide(): void {

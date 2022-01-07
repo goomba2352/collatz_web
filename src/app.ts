@@ -46,7 +46,7 @@ class Runner {
 
     var colors_tab: string = "Colors";
     var color_settings: BaseSetting<any>[] = [];
-    this.settings_panel.AddGenericControl(colors_tab, new ColorPresetsControl().GetControl(this.settings));
+    this.settings_panel.AddGenericControl(colors_tab, new ColorPresetsControl().GetControls(this.settings));
     this.settings.baseColors.forEach((x) => color_settings.push(x));
     color_settings.push(this.settings.bgColor);
     color_settings.push(this.settings.color_shift_animator);

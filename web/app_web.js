@@ -496,7 +496,7 @@ class Runner {
     this.settings_panel.AddSettings(renderer_tab, render_settings);
     var colors_tab = "Colors";
     var color_settings = [];
-    this.settings_panel.AddGenericControl(colors_tab, new _settings.ColorPresetsControl().GetControl(this.settings));
+    this.settings_panel.AddGenericControl(colors_tab, new _settings.ColorPresetsControl().GetControls(this.settings));
     this.settings.baseColors.forEach(x => color_settings.push(x));
     color_settings.push(this.settings.bgColor);
     color_settings.push(this.settings.color_shift_animator);
@@ -1437,8 +1437,9 @@ class ColorPresetsControl {
     return [60 * h < 0 ? 60 * h + 360 : 60 * h, s ? l <= 0.5 ? s / (2 * l - s) : s / (2 - (2 * l - s)) : 0, (2 * l - s) / 2];
   }
 
-  GetControl(settings) {
-    var div = document.createElement("div");
+  GetControls(settings) {
+    var row1 = document.createElement("div");
+    var row2 = document.createElement("div");
     var gray_button = document.createElement("button");
     gray_button.innerText = "Grayscale";
 
@@ -1497,7 +1498,7 @@ class ColorPresetsControl {
     }.bind(this);
 
     var near_button = document.createElement("button");
-    near_button.innerText = "Near";
+    near_button.innerText = "Magic Gradient";
 
     near_button.onclick = function () {
       var base = settings.base.value;
@@ -1508,7 +1509,7 @@ class ColorPresetsControl {
 
       for (var i = 1; i < base; i++) {
         if (i < base) {
-          var next_hsl = [seed_color_hsl[0] + h_drift * (i - 1), seed_color_hsl[1] + s_drift * (i - 1), seed_color_hsl[2] + l_drift * (i - 1)];
+          var next_hsl = [seed_color_hsl[0] + h_drift * i, seed_color_hsl[1] + s_drift * i, seed_color_hsl[2] + l_drift * i];
           settings.baseColors[i].value = this.HSLToRGB(next_hsl);
         } else {
           break;
@@ -1516,12 +1517,40 @@ class ColorPresetsControl {
       }
     }.bind(this);
 
-    div.appendChild(gray_button);
-    div.appendChild(chrom_button);
-    div.appendChild(random_button);
-    div.appendChild(same_button);
-    div.appendChild(near_button);
-    return div;
+    var near_button_circle = document.createElement("button");
+    near_button_circle.innerText = "Magic Gradient (repeat)";
+
+    near_button_circle.onclick = function () {
+      var base = settings.base.value;
+      var seed_color_hsl = this.RGBToHSL(settings.baseColors[0].value);
+      var h_drift = (Math.random() * 360 - seed_color_hsl[0]) / (settings.base.value - 1);
+      var s_drift = (Math.random() - seed_color_hsl[1]) / (settings.base.value - 1);
+      var l_drift = (Math.random() - seed_color_hsl[2]) / (settings.base.value - 1);
+
+      for (var i = 1; i < base; i++) {
+        var next_hsl;
+
+        if (i < base) {
+          if (i < base / 2) {
+            next_hsl = [seed_color_hsl[0] + h_drift * i * 2, seed_color_hsl[1] + s_drift * i * 2, seed_color_hsl[2] + l_drift * i * 2];
+          } else {
+            next_hsl = [seed_color_hsl[0] + h_drift * 2 * (base - i - 1), seed_color_hsl[1] + s_drift * 2 * (base - i - 1), seed_color_hsl[2] + l_drift * 2 * (base - i - 1)];
+          }
+
+          settings.baseColors[i].value = this.HSLToRGB(next_hsl);
+        } else {
+          break;
+        }
+      }
+    }.bind(this);
+
+    row1.appendChild(gray_button);
+    row1.appendChild(chrom_button);
+    row1.appendChild(random_button);
+    row1.appendChild(same_button);
+    row2.appendChild(near_button);
+    row2.appendChild(near_button_circle);
+    return [row1, row2];
   }
 
 }
@@ -1773,12 +1802,12 @@ class SettingsPanel {
     settings.forEach(x => this.AddSetting(tab, x));
   }
 
-  AddGenericControl(tab, control) {
+  AddGenericControl(tab, controls) {
     if (!this.tabs.has(tab)) {
       this.AddTab(tab);
     }
 
-    this.tabs.get(tab).append(control);
+    controls.forEach(x => this.tabs.get(tab).append(x));
   }
 
   hide() {
