@@ -1,4 +1,3 @@
-import { basename } from "path/posix";
 import { RenderMode } from "./number_renderer";
 
 var globalId = -1;
